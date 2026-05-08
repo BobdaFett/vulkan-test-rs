@@ -1,14 +1,10 @@
+use crate::common::scene::Scene;
+use crate::gpu::vertex3::Vertex3;
 use std::collections::HashMap;
-use std::error::Error;
-use std::path::Path;
 use std::sync::Arc;
-use nalgebra::Vector3;
-use uuid::Uuid;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter};
 use wavefront::Obj;
-use crate::common::scene::Scene;
-use crate::gpu::vertex3::Vertex3;
 
 /// This struct is slightly misleading - it doesn't actually contain the mesh information, but
 /// the locations of the mesh's information in the overall application's vertex buffer, index buffer,
@@ -24,22 +20,12 @@ use crate::gpu::vertex3::Vertex3;
 pub struct Mesh {
     pub id: String,
     pub vertex_loc: usize,
+    pub vertex_count: usize,
     pub index_loc: usize,
+    pub index_count: usize,
 }
 
-impl Mesh {
-    pub fn new(
-        id: impl Into<String>,
-        vertex_loc: usize,
-        index_loc: usize,
-    ) -> Self {
-        Self {
-            id: id.into(),
-            vertex_loc,
-            index_loc,
-        }
-    }
-}
+impl Mesh {}
 
 /// # Mesh Registry
 /// A wrapper around a series of [`Mesh`] structs, keyed by a unique ID, and the buffers that are
@@ -53,99 +39,120 @@ pub struct MeshRegistry {
 }
 
 impl MeshRegistry {
-    pub fn new(
-        allocator: Arc<dyn MemoryAllocator>,
-    ) -> Result<Self, Box<dyn Error>> {
-        let vertex_buffer = Arc::new(Buffer::new_slice::<Vertex3>(
-            allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::VERTEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_HOST |
-                    MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            1_000_000,
-        )?);
-
-        let index_buffer = Arc::new(Buffer::new_slice::<u32>(
-            allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::INDEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_HOST |
-                    MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            3_000_000,
-        )?);
-
-        Ok(Self {
-            meshes: HashMap::new(),
-            allocator,
-            vertex_buffer,
-            index_buffer,
-        })
-    }
-
-    /// Creates a `MeshRegistry` from the provided [`Scene`].
+    /// Creates a `MeshRegistry` from the given [`Scene`].
     ///
     /// This method will load all the meshes indicated by the scene and allocate the required
     /// buffers. This significantly simplifies the allocation process, as the buffers only need to
     /// be allocated once.
     pub fn from_scene(scene: &Scene, allocator: Arc<dyn MemoryAllocator>) -> Self {
-        // First, load all the meshes into a single map.
+        // Load all the meshes into a single map.
         println!("Loading meshes from scene");
-        let meshes = scene.mesh_paths.iter().map(|(id, path)|
-             (id.clone(), Obj::from_file(path).expect("Couldn't read wavefront file"))
-        ).collect::<HashMap<String, Obj>>();
+        let meshes = scene
+            .mesh_paths
+            .iter()
+            .map(|(id, path)| {
+                (
+                    id.clone(),
+                    Obj::from_file(path).expect("Couldn't read wavefront file"),
+                )
+            })
+            .collect::<HashMap<String, Obj>>();
 
-        // Second, build two more maps that contain the vertex and index information.
-        let verts = meshes.iter().map(|(id, obj)|
-            (id.clone(), obj.vertices().map(|v| v.position().into()).collect())
-        ).collect::<HashMap<String, Vec<Vector3<f32>>>>();
+        let mut verts = Vec::new();
+        let mut indices = Vec::new();
+        let mut mesh_list = HashMap::new();
+        meshes.into_iter().for_each(|(id, obj)| {
+            // Information will be added directly to the verts and indices vectors, and a new Mesh
+            // struct will be created and inserted into the mesh_list.
+            let vert_start = verts.len();
+            let all_verts = obj.vertices();
+            let vert_len = all_verts.len();
+            verts.extend(all_verts.map(|v| Vertex3::from(v.position())));
 
-        let indices = meshes.iter().map(|(id, obj)|
-            (id.clone(), obj.vertices().map(|v| v.position_index()).collect())
-        ).collect::<HashMap<String, Vec<usize>>>();
+            let index_list = obj
+                .triangles()
+                .flat_map(|t| {
+                    t.iter()
+                        .map(|i| i.position_index() as u32)
+                        .collect::<Vec<u32>>()
+                })
+                .collect::<Vec<u32>>();
+            let index_start = indices.len();
+            let index_len = index_list.len();
+            indices.extend(index_list);
 
-        // Apply static transformations here. The general idea is that we don't want to have to read
-        // any information from the buffer without the correct information. We do want to keep track
-        // of what mesh is at what location in the list though.
-        println!("Applying static mesh transformations");
+            // TODO Create bounding boxes for each mesh and associate them with the struct.
+            mesh_list.insert(
+                id.clone(),
+                Mesh {
+                    id,
+                    vertex_loc: vert_start,
+                    vertex_count: vert_len,
+                    index_loc: index_start,
+                    index_count: index_len,
+                },
+            );
+        });
 
-        // Get Vector3's as a list of Vertex3's (CPU to GPU)
+        // Allocate buffers for the information.
+        let vertex_buffer = Self::alloc_vert_buffer(allocator.clone(), verts);
+        let index_buffer = Self::alloc_index_buffer(allocator.clone(), indices);
 
-        // Third, allocate and fill buffers with this information.
-        // let vert_buffer = Self::alloc_vert_buffer(allocator, verts.values().collect());
-
-        // Fourth, return the struct.
-
-        todo!()
+        // Finally, return the struct.
+        Self {
+            meshes: mesh_list,
+            vertex_buffer,
+            index_buffer,
+            allocator,
+        }
     }
 
+    /// Allocates and writes to a vertex buffer with the given `Vec<Vertex3>`.
     fn alloc_vert_buffer(
         alloc: Arc<dyn MemoryAllocator>,
-        verts: Vec<Vertex3>
+        verts: Vec<Vertex3>,
     ) -> Arc<Subbuffer<[Vertex3]>> {
         println!("Allocating vertex buffer");
-        Arc::new(Buffer::from_iter(
-            alloc.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::VERTEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_HOST |
-                    MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            verts
-        ).expect("Couldn't allocate vertex buffer"))
+        Arc::new(
+            Buffer::from_iter(
+                alloc.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::VERTEX_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                verts,
+            )
+            .expect("Couldn't allocate vertex buffer"),
+        )
+    }
+
+    /// Allocates and writes to an index buffer with the given `Vec<usize>`.
+    fn alloc_index_buffer(
+        alloc: Arc<dyn MemoryAllocator>,
+        indices: Vec<u32>,
+    ) -> Arc<Subbuffer<[u32]>> {
+        println!("Allocating index buffer");
+        Arc::new(
+            Buffer::from_iter(
+                alloc.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::INDEX_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                indices,
+            )
+            .expect("Couldn't allocate index buffer"),
+        )
     }
 
     /// Attempts to find a [`Mesh`] with the given ID, returning `None` if it's not found.
