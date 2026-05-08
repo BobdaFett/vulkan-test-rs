@@ -1,30 +1,30 @@
 mod app;
-pub mod math;
 mod common;
 pub mod gpu;
+// pub mod math;
 
+use crate::app::MainApplication;
 use std::error::Error;
 use vulkano::swapchain::Surface;
 use winit::event_loop::{ControlFlow, EventLoop};
-use crate::app::MainApplication;
 
 // Compute shader compilation. Happens at runtime, but file contents are included during compilation.
 mod cs {
-    vulkano_shaders::shader!{
+    vulkano_shaders::shader! {
         ty: "compute",
         path: "src/shaders/comp.glsl",
     }
 }
 
 mod mandelbrot_shader {
-    vulkano_shaders::shader!{
+    vulkano_shaders::shader! {
         ty: "compute",
         path: "src/shaders/mandelbrot.glsl"
     }
 }
 
 mod triangle {
-    vulkano_shaders::shader!{
+    vulkano_shaders::shader! {
         shaders: {
             vertex: {
                 ty: "vertex",

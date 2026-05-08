@@ -1,5 +1,5 @@
-use nalgebra::{Matrix4, Vector3, Vector4};
 use crate::common::scene::SceneInstance;
+use nalgebra::{Matrix4, Vector3, Vector4};
 
 /// Contains all information about an instance of a mesh, specifically its translation, rotation,
 /// and scale. Note that the rotation is a [`Vector4`], and not a `Quaternion`.

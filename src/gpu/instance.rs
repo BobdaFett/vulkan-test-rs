@@ -1,6 +1,6 @@
+use crate::common::instance::MeshInstance;
 use vulkano::buffer::BufferContents;
 use vulkano::pipeline::graphics::vertex_input::Vertex;
-use crate::common::instance::MeshInstance;
 
 /// A transformation matrix for a mesh that can be passed into the shaders.
 #[derive(BufferContents, Vertex)]

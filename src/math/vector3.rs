@@ -1,6 +1,6 @@
-﻿use std::ops::{Add, Div, Mul, Sub};
 use crate::math::traits::Vector;
 use crate::math::vector2::Vector2;
+use std::ops::{Add, Div, Mul, Sub};
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct Vector3 {
@@ -15,24 +15,15 @@ impl Vector3 {
     }
 
     pub fn xy(&self) -> Vector2 {
-        Vector2::from([
-            self.x,
-            self.y
-        ])
+        Vector2::from([self.x, self.y])
     }
 
     pub fn yz(&self) -> Vector2 {
-        Vector2::from([
-            self.y,
-            self.z
-        ])
+        Vector2::from([self.y, self.z])
     }
 
     pub fn xz(&self) -> Vector2 {
-        Vector2::from([
-            self.x,
-            self.z
-        ])
+        Vector2::from([self.x, self.z])
     }
 
     pub fn xyz(&self) -> (f32, f32, f32) {
@@ -144,9 +135,6 @@ impl From<[f32; 3]> for Vector3 {
 
 impl From<Vector2> for Vector3 {
     fn from(v: Vector2) -> Self {
-        Self {
-            z: 0.0,
-            ..v.into()
-        }
+        Self { z: 0.0, ..v.into() }
     }
 }

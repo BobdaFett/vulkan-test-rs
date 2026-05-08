@@ -1,6 +1,6 @@
-use std::ops::{Add, Div, Mul, Sub};
-use crate::math::traits::{Matrix, Vector};
 use crate::math::Vector4;
+use crate::math::traits::{Matrix, Vector};
+use std::ops::{Add, Div, Mul, Sub};
 
 #[derive(Debug, Clone, Default, Copy, PartialEq)]
 pub struct Matrix4 {
@@ -10,8 +10,7 @@ pub struct Matrix4 {
     row4: Vector4,
 }
 
-impl Matrix4 {
-}
+impl Matrix4 {}
 
 impl Add for Matrix4 {
     type Output = Self;
@@ -68,10 +67,34 @@ impl Mul for Matrix4 {
     fn mul(self, rhs: Self) -> Self {
         let rhs = rhs.transpose();
         Self {
-            row1: [self.row1.dot(rhs.row1), self.row1.dot(rhs.row2), self.row1.dot(rhs.row3), self.row1.dot(rhs.row4)].into(),
-            row2: [self.row2.dot(rhs.row1), self.row2.dot(rhs.row2), self.row2.dot(rhs.row3), self.row2.dot(rhs.row4)].into(),
-            row3: [self.row3.dot(rhs.row1), self.row3.dot(rhs.row2), self.row3.dot(rhs.row3), self.row3.dot(rhs.row4)].into(),
-            row4: [self.row4.dot(rhs.row1), self.row4.dot(rhs.row2), self.row4.dot(rhs.row3), self.row4.dot(rhs.row4)].into(),
+            row1: [
+                self.row1.dot(rhs.row1),
+                self.row1.dot(rhs.row2),
+                self.row1.dot(rhs.row3),
+                self.row1.dot(rhs.row4),
+            ]
+            .into(),
+            row2: [
+                self.row2.dot(rhs.row1),
+                self.row2.dot(rhs.row2),
+                self.row2.dot(rhs.row3),
+                self.row2.dot(rhs.row4),
+            ]
+            .into(),
+            row3: [
+                self.row3.dot(rhs.row1),
+                self.row3.dot(rhs.row2),
+                self.row3.dot(rhs.row3),
+                self.row3.dot(rhs.row4),
+            ]
+            .into(),
+            row4: [
+                self.row4.dot(rhs.row1),
+                self.row4.dot(rhs.row2),
+                self.row4.dot(rhs.row3),
+                self.row4.dot(rhs.row4),
+            ]
+            .into(),
         }
     }
 }

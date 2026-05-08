@@ -1,8 +1,17 @@
-﻿use std::ops::{Add, Div, Mul, Sub};
 use crate::math::Vector4;
+use std::ops::{Add, Div, Mul, Sub};
 
-pub trait Vector: Clone + Copy + Default + PartialEq +  Add + Sub + PartialOrd
-    + Div<f32, Output = Self> + Mul<f32, Output = Self> {
+pub trait Vector:
+    Clone
+    + Copy
+    + Default
+    + PartialEq
+    + Add
+    + Sub
+    + PartialOrd
+    + Div<f32, Output = Self>
+    + Mul<f32, Output = Self>
+{
     /// Gets the dot product of the two vectors.
     fn dot(self, other: Self) -> f32;
 
@@ -36,14 +45,22 @@ pub trait Vector: Clone + Copy + Default + PartialEq +  Add + Sub + PartialOrd
 /// Note that this trait does not require implementation of the `Div` trait at all - this is because
 /// matrices do not have division, only multiplication by a scalar value. This doesn't mean that the
 /// scalar cannot be a decimal value, however.
-pub trait Matrix<TVec>: Clone + Copy + Default + PartialEq + Add + Sub
-    + Mul<f32, Output = Self> + Mul<TVec, Output = TVec>
+pub trait Matrix<TVec>:
+    Clone
+    + Copy
+    + Default
+    + PartialEq
+    + Add
+    + Sub
+    + Mul<f32, Output = Self>
+    + Mul<TVec, Output = TVec>
     + Mul<Output = Self>
-where TVec: Vector
+where
+    TVec: Vector,
 {
     /// Creates an identity matrix.
     fn identity() -> Self;
-    
+
     /// Gets the transpose of this matrix.
     fn transpose(&self) -> Self;
 

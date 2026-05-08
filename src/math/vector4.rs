@@ -1,6 +1,6 @@
-use std::ops::{Add, Div, Mul, Sub};
 use crate::math::traits::Vector;
 use crate::math::{Vector2, Vector3};
+use std::ops::{Add, Div, Mul, Sub};
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct Vector4 {
@@ -11,17 +11,10 @@ pub struct Vector4 {
 }
 
 impl Vector4 {
-    pub fn new(
-        x: f32,
-        y: f32,
-        z: f32,
-        w: f32,
-    ) -> Self {
-        Self {
-            x, y, z, w
-        }
+    pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
+        Self { x, y, z, w }
     }
-    
+
     pub fn one() -> Self {
         Self {
             x: 1.0,
@@ -30,7 +23,7 @@ impl Vector4 {
             w: 1.0,
         }
     }
-    
+
     pub fn xyzw(&self) -> (f32, f32, f32, f32) {
         (self.x, self.y, self.z, self.w)
     }
@@ -38,15 +31,15 @@ impl Vector4 {
     pub fn xyz(&self) -> Vector3 {
         Vector3::from([self.x, self.y, self.z])
     }
-    
+
     pub fn xy(&self) -> Vector2 {
         Vector2::from([self.x, self.y])
     }
-    
+
     pub fn yz(&self) -> Vector2 {
         Vector2::from([self.y, self.z])
     }
-    
+
     pub fn xz(&self) -> Vector2 {
         Vector2::from([self.x, self.z])
     }
@@ -54,7 +47,7 @@ impl Vector4 {
 
 impl Add for Vector4 {
     type Output = Self;
-    
+
     fn add(self, other: Self) -> Self {
         Self {
             x: self.x + other.x,
@@ -67,7 +60,7 @@ impl Add for Vector4 {
 
 impl Sub for Vector4 {
     type Output = Self;
-    
+
     fn sub(self, other: Self) -> Self {
         Self {
             x: self.x - other.x,
@@ -80,7 +73,7 @@ impl Sub for Vector4 {
 
 impl Mul<f32> for Vector4 {
     type Output = Self;
-    
+
     fn mul(self, rhs: f32) -> Self::Output {
         Self {
             x: self.x * rhs,
@@ -93,7 +86,7 @@ impl Mul<f32> for Vector4 {
 
 impl Mul<Vector4> for f32 {
     type Output = Vector4;
-    
+
     fn mul(self, rhs: Vector4) -> Self::Output {
         rhs * self
     }
@@ -128,7 +121,7 @@ impl Div<f32> for Vector4 {
 
 impl Div<Vector4> for f32 {
     type Output = Vector4;
-    
+
     fn div(self, rhs: Vector4) -> Self::Output {
         rhs / self
     }
@@ -150,28 +143,20 @@ impl Vector for Vector4 {
 
 impl From<[f32; 4]> for Vector4 {
     fn from([x, y, z, w]: [f32; 4]) -> Self {
-        Self {
-            x, y, z, w,
-        }
+        Self { x, y, z, w }
     }
 }
 
 impl From<[f32; 3]> for Vector4 {
     /// Creates a homogenous `Vector4` from a 3D positional vector.
     fn from([x, y, z]: [f32; 3]) -> Self {
-        Self {
-            x, y, z,
-            w: 1.0,
-        }
+        Self { x, y, z, w: 1.0 }
     }
 }
 
 impl From<Vector3> for Vector4 {
     fn from(Vector3 { x, y, z }: Vector3) -> Self {
-        Self {
-            x, y, z,
-            w: 1.0
-        }
+        Self { x, y, z, w: 1.0 }
     }
 }
 

@@ -1,5 +1,5 @@
-﻿use std::ops::{Add, Div, Mul, Sub, Index, IndexMut};
 use crate::math::traits::Vector;
+use std::ops::{Add, Div, Index, IndexMut, Mul, Sub};
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct Vector2 {
@@ -118,18 +118,12 @@ impl Vector for Vector2 {
 
 impl From<[f32; 2]> for Vector2 {
     fn from(v: [f32; 2]) -> Self {
-        Self {
-            x: v[0],
-            y: v[1],
-        }
+        Self { x: v[0], y: v[1] }
     }
 }
 
 impl From<f32> for Vector2 {
     fn from(v: f32) -> Self {
-        Self {
-            x: v,
-            y: 0.0,
-        }
+        Self { x: v, y: 0.0 }
     }
 }

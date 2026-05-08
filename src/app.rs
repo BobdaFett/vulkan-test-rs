@@ -1,36 +1,45 @@
-﻿use std::error::Error;
+use crate::common::mesh::MeshRegistry;
+use crate::gpu::vertex3::Vertex3;
+use crate::triangle;
+use std::error::Error;
 use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
-use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo};
+use vulkano::command_buffer::allocator::{
+    StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo,
+};
+use vulkano::command_buffer::{
+    AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo,
+    SubpassBeginInfo, SubpassContents, SubpassEndInfo,
+};
 use vulkano::descriptor_set::allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator};
-use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags};
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
-use vulkano::image::{Image, ImageUsage};
+use vulkano::device::{
+    Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
+};
 use vulkano::image::view::ImageView;
+use vulkano::image::{Image, ImageUsage};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions};
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator};
-use vulkano::pipeline::{GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo};
-use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
+use vulkano::memory::allocator::{
+    AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
+};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
+use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
+use vulkano::pipeline::{GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo};
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass};
-use vulkano::swapchain::{Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo};
-use vulkano::{swapchain, sync, Validated, VulkanError, VulkanLibrary};
 use vulkano::shader::ShaderModule;
+use vulkano::swapchain::{Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::sync::GpuFuture;
+use vulkano::{Validated, VulkanError, VulkanLibrary, swapchain, sync};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowAttributes, WindowId};
-use crate::common::mesh::MeshRegistry;
-use crate::gpu::vertex3::Vertex3;
-use crate::triangle;
 
 struct VulkanContext {
     window: Arc<Window>,
@@ -54,7 +63,10 @@ impl VulkanContext {
     /// Initializes and returns a new `VulkanContext`. It may fail in all cases where a Vulkan object
     /// may fail, specifically during initialization of shaders, devices, buffers, or any other such
     /// structures.
-    pub fn init(instance: Arc<Instance>, event_loop: &ActiveEventLoop) -> Result<Self, Box<dyn Error>> {
+    pub fn init(
+        instance: Arc<Instance>,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<Self, Box<dyn Error>> {
         let attributes = WindowAttributes::default()
             .with_title("Vulkano Example")
             .with_resizable(true);
@@ -70,41 +82,29 @@ impl VulkanContext {
 
         // Get a physical device. Fails if there is no suitable device found. The device must have a
         // graphics queue and swapchain capabilities.
-        let (physical_device, queue_family_idx) = Self::get_physical_device(
-            instance.clone(),
-            surface.clone(),
-            &dev_extensions
-        )?;
+        let (physical_device, queue_family_idx) =
+            Self::get_physical_device(instance.clone(), surface.clone(), &dev_extensions)?;
 
         // Create a Vulkan device. This is a handle to the connection between the program and the
         // chosen physical device.
         let (device, mut queues) = Self::create_device(
             physical_device.clone(),
             &dev_extensions,
-            queue_family_idx as usize
+            queue_family_idx as usize,
         )?;
 
         // Get the first queue. This is what we'll use for drawing.
-        let queue = queues.next()
-            .ok_or("Queues list was empty.")?;
+        let queue = queues.next().ok_or("Queues list was empty.")?;
 
-        let capabilities = physical_device
-            .surface_capabilities(
-                &surface,
-                Default::default()
-            )?;
+        let capabilities = physical_device.surface_capabilities(&surface, Default::default())?;
 
-        let dimensions = window
-            .inner_size();
+        let dimensions = window.inner_size();
         let composite_alpha = capabilities
             .supported_composite_alpha
             .into_iter()
             .next()
             .ok_or("No composite alpha supported")?;
-        let image_format = physical_device
-            .surface_formats(&surface, Default::default())?
-            [0]
-            .0;
+        let image_format = physical_device.surface_formats(&surface, Default::default())?[0].0;
 
         // Swapchain needs to be easily changeable, since resizing the window creates a whole new
         // set of information. Putting this into a function would be good, but also the new
@@ -119,7 +119,7 @@ impl VulkanContext {
                 image_usage: ImageUsage::COLOR_ATTACHMENT,
                 composite_alpha,
                 ..Default::default()
-            }
+            },
         )?;
 
         let mem_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
@@ -127,7 +127,10 @@ impl VulkanContext {
             device.clone(),
             StandardCommandBufferAllocatorCreateInfo::default(),
         ));
-        let desc_allocator = Arc::new(StandardDescriptorSetAllocator::new(device.clone(), Default::default()));
+        let desc_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            device.clone(),
+            Default::default(),
+        ));
 
         let render_pass = vulkano::single_pass_renderpass!(
             device.clone(),
@@ -158,7 +161,7 @@ impl VulkanContext {
             &vert_shader,
             &frag_shader,
             &render_pass,
-            [image_extents[0] as f32, image_extents[1] as f32]
+            [image_extents[0] as f32, image_extents[1] as f32],
         )?;
 
         let vertex_buffer = Arc::new(Buffer::from_iter(
@@ -173,11 +176,19 @@ impl VulkanContext {
                 ..Default::default()
             },
             vec![
-                Vertex3 { position: [0.5, 0.5, 0.0] },
-                Vertex3 { position: [-0.5, 0.5, 0.0] },
-                Vertex3 { position: [-0.5, -0.5, 0.0] },
-                Vertex3 { position: [0.5, -0.5, 0.0] },
-            ]
+                Vertex3 {
+                    position: [0.5, 0.5, 0.0],
+                },
+                Vertex3 {
+                    position: [-0.5, 0.5, 0.0],
+                },
+                Vertex3 {
+                    position: [-0.5, -0.5, 0.0],
+                },
+                Vertex3 {
+                    position: [0.5, -0.5, 0.0],
+                },
+            ],
         )?);
 
         let index_buffer = Arc::new(Buffer::from_iter(
@@ -191,10 +202,7 @@ impl VulkanContext {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            vec![
-                0, 1, 2,
-                0, 2, 3,
-            ]
+            vec![0, 1, 2, 0, 2, 3],
         )?);
 
         let cmd_buffers = Self::get_command_buffers(
@@ -203,12 +211,10 @@ impl VulkanContext {
             &pipeline,
             &framebuffers,
             &vertex_buffer,
-            &index_buffer
+            &index_buffer,
         )?;
 
-        let mesh_registry = Arc::new(MeshRegistry::new(
-            mem_allocator.clone(),
-        )?);
+        let mesh_registry = Arc::new(MeshRegistry::new(mem_allocator.clone())?);
 
         Ok(Self {
             window,
@@ -233,7 +239,8 @@ impl VulkanContext {
     pub fn draw_frame(&mut self) -> Result<(), Box<dyn Error>> {
         let (image_idx, suboptimal, acquire_future) =
             match swapchain::acquire_next_image(self.swapchain.clone(), None)
-                .map_err(Validated::unwrap){
+                .map_err(Validated::unwrap)
+            {
                 Ok(r) => r,
                 Err(VulkanError::OutOfDate) => {
                     println!("Swapchain is out of date!");
@@ -252,7 +259,10 @@ impl VulkanContext {
 
         let execution = sync::now(self.device.clone())
             .join(acquire_future)
-            .then_execute(self.queue.clone(), self.cmd_buffers[image_idx as usize].clone())?
+            .then_execute(
+                self.queue.clone(),
+                self.cmd_buffers[image_idx as usize].clone(),
+            )?
             .then_swapchain_present(
                 self.queue.clone(),
                 SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_idx),
@@ -269,7 +279,7 @@ impl VulkanContext {
     fn get_physical_device(
         instance: Arc<Instance>,
         surface: Arc<Surface>,
-        extensions: &DeviceExtensions
+        extensions: &DeviceExtensions,
     ) -> Result<(Arc<PhysicalDevice>, u32), String> {
         instance
             .enumerate_physical_devices()
@@ -285,12 +295,10 @@ impl VulkanContext {
                     })
                     .map(|q| (dev, q as u32))
             })
-            .min_by_key(|(dev, _)| {
-                match dev.properties().device_type {
-                    PhysicalDeviceType::DiscreteGpu => 0,
-                    PhysicalDeviceType::Cpu => 1,
-                    _ => 2
-                }
+            .min_by_key(|(dev, _)| match dev.properties().device_type {
+                PhysicalDeviceType::DiscreteGpu => 0,
+                PhysicalDeviceType::Cpu => 1,
+                _ => 2,
             })
             .ok_or_else(|| "No physical devices found".to_string())
     }
@@ -299,7 +307,7 @@ impl VulkanContext {
     fn create_device(
         physical_device: Arc<PhysicalDevice>,
         device_extensions: &DeviceExtensions,
-        graphics_index: usize
+        graphics_index: usize,
     ) -> Result<(Arc<Device>, impl ExactSizeIterator<Item = Arc<Queue>>), String> {
         Device::new(
             physical_device.clone(),
@@ -310,17 +318,18 @@ impl VulkanContext {
                 }],
                 enabled_extensions: device_extensions.clone(),
                 ..Default::default()
-            }
+            },
         )
-            .map_err(|e| format!("Failed to create device: {e}"))
+        .map_err(|e| format!("Failed to create device: {e}"))
     }
 
     /// Creates a new [`Framebuffer`] for each swapchain image.
     fn create_framebuffers(
         images: &Vec<Arc<Image>>,
-        render_pass: &Arc<RenderPass>
+        render_pass: &Arc<RenderPass>,
     ) -> Result<Vec<Arc<Framebuffer>>, Box<dyn Error>> {
-        let framebuffers = images.iter()
+        let framebuffers = images
+            .iter()
             .map(|image| {
                 let view = ImageView::new_default(image.clone()).unwrap();
 
@@ -329,9 +338,9 @@ impl VulkanContext {
                     FramebufferCreateInfo {
                         attachments: vec![view],
                         ..Default::default()
-                    }
+                    },
                 )
-                    .unwrap()
+                .unwrap()
             })
             .collect::<Vec<Arc<Framebuffer>>>();
 
@@ -348,26 +357,27 @@ impl VulkanContext {
         extents: [f32; 2],
     ) -> Result<Arc<GraphicsPipeline>, Box<dyn Error>> {
         // Get shader stages
-        let vs = vert_shader.entry_point("main")
+        let vs = vert_shader
+            .entry_point("main")
             .ok_or("Failed to find vertex shader entry point")?;
-        let fs = frag_shader.entry_point("main")
+        let fs = frag_shader
+            .entry_point("main")
             .ok_or("Failed to find fragment shader entry point")?;
 
-        let vertex_input_state = Vertex3::per_vertex()
-            .definition(&vs)?;
+        let vertex_input_state = Vertex3::per_vertex().definition(&vs)?;
 
         let stages = vec![
             PipelineShaderStageCreateInfo::new(vs),
             PipelineShaderStageCreateInfo::new(fs),
         ];
 
-        let subpass = Subpass::from(render_pass.clone(), 0)
-            .ok_or("Failed to create pipeline subpass")?;
+        let subpass =
+            Subpass::from(render_pass.clone(), 0).ok_or("Failed to create pipeline subpass")?;
 
         let layout = PipelineLayout::new(
             device.clone(),
             PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
-                .into_pipeline_layout_create_info(device.clone())?
+                .into_pipeline_layout_create_info(device.clone())?,
         )?;
 
         let viewport = Viewport {
@@ -392,12 +402,12 @@ impl VulkanContext {
                 multisample_state: Some(MultisampleState::default()),
                 color_blend_state: Some(ColorBlendState::with_attachment_states(
                     subpass.num_color_attachments(),
-                    ColorBlendAttachmentState::default()
+                    ColorBlendAttachmentState::default(),
                 )),
                 dynamic_state: Default::default(),
                 subpass: Some(subpass.into()),
                 ..GraphicsPipelineCreateInfo::layout(layout)
-            }
+            },
         )?)
     }
 
@@ -408,15 +418,17 @@ impl VulkanContext {
         pipeline: &Arc<GraphicsPipeline>,
         framebuffers: &Vec<Arc<Framebuffer>>,
         vertex_buffer: &Arc<Subbuffer<[Vertex3]>>,
-        index_buffer: &Subbuffer<[u32]>
+        index_buffer: &Subbuffer<[u32]>,
     ) -> Result<Vec<Arc<PrimaryAutoCommandBuffer>>, Box<dyn Error>> {
-        let buffers = framebuffers.iter()
+        let buffers = framebuffers
+            .iter()
             .filter_map(|framebuffer| {
                 let mut builder = AutoCommandBufferBuilder::primary(
                     cmd_allocator.clone(),
                     queue.queue_family_index(),
-                    CommandBufferUsage::MultipleSubmit
-                ).ok()?;
+                    CommandBufferUsage::MultipleSubmit,
+                )
+                .ok()?;
 
                 unsafe {
                     builder
@@ -428,14 +440,20 @@ impl VulkanContext {
                             SubpassBeginInfo {
                                 contents: SubpassContents::Inline,
                                 ..Default::default()
-                            }
-                        ).ok()?
-                        .bind_pipeline_graphics(pipeline.clone()).ok()?
-                        .bind_vertex_buffers(0, vertex_buffer.as_ref().clone()).ok()?
-                        .bind_index_buffer(index_buffer.clone()).ok()?
+                            },
+                        )
+                        .ok()?
+                        .bind_pipeline_graphics(pipeline.clone())
+                        .ok()?
+                        .bind_vertex_buffers(0, vertex_buffer.as_ref().clone())
+                        .ok()?
+                        .bind_index_buffer(index_buffer.clone())
+                        .ok()?
                         // .draw(vertex_buffer.len() as u32, 1, 0, 0).ok()?
-                        .draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0).ok()?
-                        .end_render_pass(SubpassEndInfo::default()).ok()?;
+                        .draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0)
+                        .ok()?
+                        .end_render_pass(SubpassEndInfo::default())
+                        .ok()?;
                 }
 
                 builder.build().ok()
@@ -450,19 +468,21 @@ impl VulkanContext {
     /// specifically the [`GraphicsPipeline`] and [`PrimaryAutoCommandBuffer`]. All information is
     /// automatically set within the `VulkanContext`.
     pub fn recreate_swapchain(&mut self, resized: bool) -> Result<(), Box<dyn Error>> {
-        unsafe { self.device.wait_idle()?; };
+        unsafe {
+            self.device.wait_idle()?;
+        };
 
-        let (new_swapchain, new_images) = self.swapchain
-            .recreate(SwapchainCreateInfo {
-                image_extent: self.window.inner_size().into(),
-                ..self.swapchain.create_info()
-            })?;
+        let (new_swapchain, new_images) = self.swapchain.recreate(SwapchainCreateInfo {
+            image_extent: self.window.inner_size().into(),
+            ..self.swapchain.create_info()
+        })?;
 
         self.swapchain = new_swapchain;
         self.swapchain_images = new_images;
 
         // Recreate the framebuffers, which depend on the swapchain.
-        let new_framebuffers = Self::create_framebuffers(&self.swapchain_images, &self.render_pass)?;
+        let new_framebuffers =
+            Self::create_framebuffers(&self.swapchain_images, &self.render_pass)?;
 
         self.framebuffers = new_framebuffers;
 
@@ -482,7 +502,7 @@ impl VulkanContext {
                 &new_pipeline,
                 &self.framebuffers,
                 &self.mesh_registry.vertex_buffer,
-                &self.mesh_registry.index_buffer
+                &self.mesh_registry.index_buffer,
             )?;
 
             self.pipeline = new_pipeline;
@@ -517,11 +537,9 @@ impl MainApplication {
     }
 
     /// Gets the Vulkan instance.
-    fn get_instance(
-        required_extensions: InstanceExtensions,
-    ) -> Result<Arc<Instance>, String> {
-        let library = VulkanLibrary::new()
-            .map_err(|e| format!("Failed to find Vulkan library: {e}"))?;
+    fn get_instance(required_extensions: InstanceExtensions) -> Result<Arc<Instance>, String> {
+        let library =
+            VulkanLibrary::new().map_err(|e| format!("Failed to find Vulkan library: {e}"))?;
 
         Instance::new(
             library,
@@ -529,36 +547,43 @@ impl MainApplication {
                 flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
                 enabled_extensions: required_extensions,
                 ..Default::default()
-            }
+            },
         )
-            .map_err(|e| format!("Failed to create instance: {e}"))
+        .map_err(|e| format!("Failed to create instance: {e}"))
     }
 }
 
 impl ApplicationHandler for MainApplication {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        self.context.is_none()
-            .then(|| {
-                // Initialization logic
-                let context = VulkanContext::init(
-                    self.instance.clone(),
-                    event_loop
-                ).expect("Couldn't initialize VulkanContext");
+        self.context.is_none().then(|| {
+            // Initialization logic
+            let context = VulkanContext::init(self.instance.clone(), event_loop)
+                .expect("Couldn't initialize VulkanContext");
 
-                self.context = Some(context);
-            });
+            self.context = Some(context);
+        });
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
         match event {
             WindowEvent::CloseRequested => {
                 println!("Closing window.");
                 event_loop.exit();
             }
             WindowEvent::Resized(dimensions) => {
-                println!("Window was resized, recreating swapchain. New dimensions: {:?}", dimensions);
+                println!(
+                    "Window was resized, recreating swapchain. New dimensions: {:?}",
+                    dimensions
+                );
                 if let Some(context) = self.context.as_mut() {
-                    context.recreate_swapchain(true).expect("Failed to recreate swapchain");
+                    context
+                        .recreate_swapchain(true)
+                        .expect("Failed to recreate swapchain");
                 }
             }
             WindowEvent::RedrawRequested => {
@@ -569,7 +594,7 @@ impl ApplicationHandler for MainApplication {
                 // Queue the next frame for drawing.
                 self.context.as_ref().unwrap().window.request_redraw();
             }
-            _ => ()
+            _ => (),
         }
     }
 }

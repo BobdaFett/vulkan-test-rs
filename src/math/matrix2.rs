@@ -1,6 +1,6 @@
-use std::ops::{Add, Index, IndexMut, Mul, Sub};
+use crate::math::Vector2;
 use crate::math::traits::{Matrix, Vector};
-use crate::math::{Vector2};
+use std::ops::{Add, Index, IndexMut, Mul, Sub};
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Copy, Default)]
 pub struct Matrix2 {
@@ -14,17 +14,11 @@ impl Matrix2 {
     }
 
     pub fn row_vector(&self, row: usize) -> Vector2 {
-        Vector2::from([
-            self[row][0],
-            self[row][1],
-        ])
+        Vector2::from([self[row][0], self[row][1]])
     }
 
     pub fn column_vector(&self, col: usize) -> Vector2 {
-        Vector2::from([
-            self[0][col],
-            self[1][col],
-        ])
+        Vector2::from([self[0][col], self[1][col]])
     }
 }
 

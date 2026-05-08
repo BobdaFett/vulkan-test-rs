@@ -1,7 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
-use serde::{Deserialize, Serialize};
 
 /// A scene, which holds all information required to render a world.
 ///
@@ -26,16 +26,15 @@ pub struct Scene {
 impl Scene {
     /// Converts this `Scene` into its byte representation.
     pub fn bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self)
-            .expect("Couldn't serialize scene")
+        postcard::to_allocvec(self).expect("Couldn't serialize scene")
     }
 
     /// Reads a `scene` from the given path. Automatically resolves all paths for the meshes that
     /// are referenced in the struct.
-    /// 
+    ///
     /// Reading a scene file allows for all meshes to be loaded at once, which therefore allows
     /// the program to allocate pipeline buffers just once during the load of this. It would likely
-    /// be reasonable to create a `MeshRegistry` and `InstanceRegistry` at the same time, with 
+    /// be reasonable to create a `MeshRegistry` and `InstanceRegistry` at the same time, with
     /// respect to a single loaded `Scene`.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Self {
         let path = path.as_ref();
@@ -43,18 +42,20 @@ impl Scene {
         let mut contents = Vec::new();
         let _ = file.read_to_end(&mut contents).unwrap();
 
-        let mut scene: Self = postcard::from_bytes(contents.as_slice())
-            .expect("Couldn't deserialize scene");
+        let mut scene: Self =
+            postcard::from_bytes(contents.as_slice()).expect("Couldn't deserialize scene");
 
         let base = path.parent().unwrap_or(&Path::new("."));
-        scene.mesh_paths = scene.mesh_paths
+        scene.mesh_paths = scene
+            .mesh_paths
             .into_iter()
             .map(|(id, mesh_path)| {
                 let res = base.join(mesh_path);
                 let str = res.to_str().unwrap_or_default();
 
                 (id, str.to_string())
-            }).collect::<HashMap<String, String>>();
+            })
+            .collect::<HashMap<String, String>>();
 
         scene
     }
