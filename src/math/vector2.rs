@@ -1,4 +1,4 @@
-﻿use std::ops::{Add, Div, Mul, Sub};
+﻿use std::ops::{Add, Div, Mul, Sub, Index, IndexMut};
 use crate::math::traits::Vector;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd)]
@@ -14,6 +14,27 @@ impl Vector2 {
 
     pub fn from_values(x: f32, y: f32) -> Self {
         Self { x, y }
+    }
+}
+
+impl Index<usize> for Vector2 {
+    type Output = f32;
+    fn index(&self, idx: usize) -> &f32 {
+        match idx {
+            0 => &self.x,
+            1 => &self.y,
+            _ => panic!("Index out of bounds"),
+        }
+    }
+}
+
+impl IndexMut<usize> for Vector2 {
+    fn index_mut(&mut self, idx: usize) -> &mut f32 {
+        match idx {
+            0 => &mut self.x,
+            1 => &mut self.y,
+            _ => panic!("Index out of bounds"),
+        }
     }
 }
 

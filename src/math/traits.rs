@@ -1,6 +1,8 @@
 ﻿use std::ops::{Add, Div, Mul, Sub};
+use crate::math::Vector4;
 
-pub trait Vector: Copy + Default + PartialEq + PartialOrd + Add + Sub + Div<f32, Output = Self> + Mul<f32, Output = Self> {
+pub trait Vector: Clone + Copy + Default + PartialEq +  Add + Sub + PartialOrd
+    + Div<f32, Output = Self> + Mul<f32, Output = Self> {
     /// Gets the dot product of the two vectors.
     fn dot(self, other: Self) -> f32;
 
@@ -26,32 +28,42 @@ pub trait Vector: Copy + Default + PartialEq + PartialOrd + Add + Sub + Div<f32,
     }
 }
 
-pub trait Matrix: Copy + Default + PartialEq + PartialOrd + Add + Sub
-    + Div<f32, Output = Self> + Div
-    + Mul<f32, Output = Self> + Mul {
+/// # Matrix Trait
+///
+/// Requires a few manual implementations, specifically the `identity`, `transpose`, and `determinant`.
+/// All other information can be found by the trait itself.
+///
+/// Note that this trait does not require implementation of the `Div` trait at all - this is because
+/// matrices do not have division, only multiplication by a scalar value. This doesn't mean that the
+/// scalar cannot be a decimal value, however.
+pub trait Matrix<TVec>: Clone + Copy + Default + PartialEq + Add + Sub
+    + Mul<f32, Output = Self> + Mul<TVec, Output = TVec>
+    + Mul<Output = Self>
+where TVec: Vector
+{
     /// Creates an identity matrix.
     fn identity() -> Self;
     
     /// Gets the transpose of this matrix.
-    fn transpose(self) -> Self;
+    fn transpose(&self) -> Self;
 
     /// Gets the determinant of this matrix.
-    fn determinant(self) -> f32;
+    fn determinant(&self) -> f32;
 
     /// Finds the minor of this matrix. The element at location (`i`, `j`) of the minor is the
     /// determinant of the submatrix obtained by removing row `i` and column `j` in the original
     /// matrix.
-    fn minor(self) -> Self;
+    fn minor(&self) -> Self;
 
     /// Finds the cofactor of this matrix. The element at location (`i`, `j`) of the cofactor is
     /// defined as -1^ij * Mij, where Mij is the element at (`i`, `j`) in the minor of the matrix.
     /// This is effectively flipping the sign of every other element in the minor of this matrix.
-    fn cofactor(self) -> Self;
+    fn cofactor(&self) -> Self;
 
     /// Gets the adjugate of this matrix. This is the transpose of the cofactor of this matrix.
-    fn adjugate(self) -> Self;
+    fn adjugate(&self) -> Self;
 
     /// Gets the inverse of this matrix. Note that this is a very expensive operation and should
     /// be used as sparingly as possible.
-    fn inverse(self) -> Self;
+    fn inverse(&self) -> Self;
 }

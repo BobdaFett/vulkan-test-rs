@@ -11,8 +11,24 @@ pub struct Vector4 {
 }
 
 impl Vector4 {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(
+        x: f32,
+        y: f32,
+        z: f32,
+        w: f32,
+    ) -> Self {
+        Self {
+            x, y, z, w
+        }
+    }
+    
+    pub fn one() -> Self {
+        Self {
+            x: 1.0,
+            y: 1.0,
+            z: 1.0,
+            w: 1.0,
+        }
     }
     
     pub fn xyzw(&self) -> (f32, f32, f32, f32) {
@@ -83,6 +99,20 @@ impl Mul<Vector4> for f32 {
     }
 }
 
+impl Mul for Vector4 {
+    type Output = Self;
+
+    /// Computes the Hadamard product of the two vectors.
+    fn mul(self, rhs: Self) -> Self {
+        Self {
+            x: self.x * rhs.x,
+            y: self.y * rhs.y,
+            z: self.z * rhs.z,
+            w: self.w * rhs.w,
+        }
+    }
+}
+
 impl Div<f32> for Vector4 {
     type Output = Self;
 
@@ -119,12 +149,28 @@ impl Vector for Vector4 {
 }
 
 impl From<[f32; 4]> for Vector4 {
-    fn from(v: [f32; 4]) -> Self {
+    fn from([x, y, z, w]: [f32; 4]) -> Self {
         Self {
-            x: v[0],
-            y: v[1],
-            z: v[2],
-            w: v[3],
+            x, y, z, w,
+        }
+    }
+}
+
+impl From<[f32; 3]> for Vector4 {
+    /// Creates a homogenous `Vector4` from a 3D positional vector.
+    fn from([x, y, z]: [f32; 3]) -> Self {
+        Self {
+            x, y, z,
+            w: 1.0,
+        }
+    }
+}
+
+impl From<Vector3> for Vector4 {
+    fn from(Vector3 { x, y, z }: Vector3) -> Self {
+        Self {
+            x, y, z,
+            w: 1.0
         }
     }
 }

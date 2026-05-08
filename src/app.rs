@@ -1,6 +1,6 @@
 ﻿use std::error::Error;
 use std::sync::Arc;
-use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo};
 use vulkano::descriptor_set::allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator};
@@ -28,36 +28,9 @@ use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowAttributes, WindowId};
-use crate::math::Vector2;
+use crate::common::mesh::MeshRegistry;
+use crate::gpu::vertex3::Vertex3;
 use crate::triangle;
-
-/// The `Vertex2` is an intermediate structure used to represent the [`Vector2`] in the graphics
-/// pipeline. It specifies a positional value and can be passed directly into the shaders.
-/// Note that conversion between a `Vector2` and a `Vertex2` may take extra computation time.
-///
-/// Honestly, I'm still not sure if this should be handled on a per-shader basis, as the position
-/// argument changes with each shader.
-#[derive(BufferContents, Vertex)]
-#[repr(C)]
-struct Vertex2 {
-    #[format(R32G32_SFLOAT)]
-    position: [f32; 2],
-}
-
-impl From<Vector2> for Vertex2 {
-    fn from(v: Vector2) -> Self {
-        Self {
-            position: [v.x, v.y],
-        }
-    }
-}
-
-#[derive(BufferContents, Vertex)]
-#[repr(C)]
-struct Vertex3 {
-    #[format(R32G32B32_SFLOAT)]
-    position: [f32; 3],
-}
 
 struct VulkanContext {
     window: Arc<Window>,
@@ -73,9 +46,8 @@ struct VulkanContext {
     render_pass: Arc<RenderPass>,
     framebuffers: Vec<Arc<Framebuffer>>,
     pipeline: Arc<GraphicsPipeline>,
-    vertex_buffer: Arc<Subbuffer<[Vertex2]>>,
-    index_buffer: Arc<Subbuffer<[u32]>>,
     cmd_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
+    mesh_registry: Arc<MeshRegistry>,
 }
 
 impl VulkanContext {
@@ -201,10 +173,10 @@ impl VulkanContext {
                 ..Default::default()
             },
             vec![
-                Vertex2 { position: [0.5, 0.5] },
-                Vertex2 { position: [-0.5, 0.5] },
-                Vertex2 { position: [-0.5, -0.5] },
-                Vertex2 { position: [0.5, -0.5] },
+                Vertex3 { position: [0.5, 0.5, 0.0] },
+                Vertex3 { position: [-0.5, 0.5, 0.0] },
+                Vertex3 { position: [-0.5, -0.5, 0.0] },
+                Vertex3 { position: [0.5, -0.5, 0.0] },
             ]
         )?);
 
@@ -234,6 +206,10 @@ impl VulkanContext {
             &index_buffer
         )?;
 
+        let mesh_registry = Arc::new(MeshRegistry::new(
+            mem_allocator.clone(),
+        )?);
+
         Ok(Self {
             window,
             device,
@@ -248,9 +224,8 @@ impl VulkanContext {
             frag_shader,
             framebuffers,
             pipeline,
-            vertex_buffer,
-            index_buffer,
-            cmd_buffers
+            cmd_buffers,
+            mesh_registry,
         })
     }
 
@@ -378,7 +353,7 @@ impl VulkanContext {
         let fs = frag_shader.entry_point("main")
             .ok_or("Failed to find fragment shader entry point")?;
 
-        let vertex_input_state = Vertex2::per_vertex()
+        let vertex_input_state = Vertex3::per_vertex()
             .definition(&vs)?;
 
         let stages = vec![
@@ -432,7 +407,7 @@ impl VulkanContext {
         queue: &Arc<Queue>,
         pipeline: &Arc<GraphicsPipeline>,
         framebuffers: &Vec<Arc<Framebuffer>>,
-        vertex_buffer: &Subbuffer<[Vertex2]>,
+        vertex_buffer: &Arc<Subbuffer<[Vertex3]>>,
         index_buffer: &Subbuffer<[u32]>
     ) -> Result<Vec<Arc<PrimaryAutoCommandBuffer>>, Box<dyn Error>> {
         let buffers = framebuffers.iter()
@@ -456,7 +431,7 @@ impl VulkanContext {
                             }
                         ).ok()?
                         .bind_pipeline_graphics(pipeline.clone()).ok()?
-                        .bind_vertex_buffers(0, vertex_buffer.clone()).ok()?
+                        .bind_vertex_buffers(0, vertex_buffer.as_ref().clone()).ok()?
                         .bind_index_buffer(index_buffer.clone()).ok()?
                         // .draw(vertex_buffer.len() as u32, 1, 0, 0).ok()?
                         .draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0).ok()?
@@ -506,8 +481,8 @@ impl VulkanContext {
                 &self.queue,
                 &new_pipeline,
                 &self.framebuffers,
-                &self.vertex_buffer,
-                &self.index_buffer
+                &self.mesh_registry.vertex_buffer,
+                &self.mesh_registry.index_buffer
             )?;
 
             self.pipeline = new_pipeline;

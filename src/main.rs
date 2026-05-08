@@ -1,5 +1,7 @@
 mod app;
 pub mod math;
+mod common;
+pub mod gpu;
 
 use std::error::Error;
 use vulkano::swapchain::Surface;
