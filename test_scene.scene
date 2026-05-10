@@ -1,0 +1,25 @@
+{
+  "name": "Testing Scene",
+  "mesh_paths": {
+    "gunship": "laat_gunship/laat.obj"
+  },
+  "instances": {
+    "gunship": {
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  }
+}
