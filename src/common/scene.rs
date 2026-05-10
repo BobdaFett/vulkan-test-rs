@@ -42,10 +42,23 @@ impl Scene {
         let mut contents = Vec::new();
         let _ = file.read_to_end(&mut contents).unwrap();
 
-        let mut scene: Self =
+        let scene: Self =
             postcard::from_bytes(contents.as_slice()).expect("Couldn't deserialize scene");
 
-        let base = path.parent().unwrap_or(&Path::new("."));
+        Self::resolve_paths(path, scene)
+    }
+
+    pub fn from_file_json<P: AsRef<Path>>(path: P) -> Self {
+        let path = path.as_ref();
+
+        let file = std::fs::File::open(path).unwrap();
+        let scene: Self = serde_json::from_reader(file).unwrap();
+
+        Self::resolve_paths(path, scene)
+    }
+
+    fn resolve_paths(scene_path: &Path, mut scene: Self) -> Self {
+        let base = scene_path.parent().unwrap_or(&Path::new("."));
         scene.mesh_paths = scene
             .mesh_paths
             .into_iter()
@@ -72,4 +85,35 @@ pub struct SceneInstance {
     pub translation: [f32; 3],
     pub rotation: [f32; 3],
     pub scale: [f32; 3],
+}
+
+#[cfg(test)]
+pub mod create_files {
+    use std::error::Error;
+    use std::io::Write;
+    pub use super::*;
+
+    #[test]
+    pub fn create_test_scene() -> Result<(), Box<dyn Error>> {
+        let scene = Scene {
+            name: "Testing Scene".to_string(),
+            mesh_paths: HashMap::from([
+                ("venator".to_string(), "Venator.obj".to_string())
+            ]),
+            instances: HashMap::from([
+                ("venator".to_string(), SceneInstance {
+                    translation: [0.0, 0.0, 0.0],
+                    rotation: [0.0, 0.0, 0.0],
+                    scale: [1.0, 1.0, 1.0]
+                })
+            ])
+        };
+
+        let json = serde_json::to_string_pretty(&scene)?;
+
+        let mut file = std::fs::File::create("test_scene.scene")?;
+        file.write_all(json.as_bytes())?;
+
+        Ok(())
+    }
 }

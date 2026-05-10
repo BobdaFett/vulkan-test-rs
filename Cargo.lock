@@ -2627,6 +2627,7 @@ dependencies = [
  "nalgebra",
  "postcard",
  "serde",
+ "serde_json",
  "uuid",
  "vulkano",
  "vulkano-shaders",

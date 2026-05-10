@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::common::mesh::MeshRegistry;
 use crate::gpu::vertex3::Vertex3;
 use crate::triangle;
@@ -30,16 +31,23 @@ use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
-use vulkano::pipeline::{GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo};
+use vulkano::pipeline::{GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass};
 use vulkano::shader::ShaderModule;
 use vulkano::swapchain::{Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::sync::GpuFuture;
 use vulkano::{Validated, VulkanError, VulkanLibrary, swapchain, sync};
+use vulkano::descriptor_set::DescriptorSet;
+use vulkano::descriptor_set::layout::DescriptorSetLayout;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowAttributes, WindowId};
+use crate::common::camera::{Camera, CameraResources};
+use crate::common::instance::InstanceRegistry;
+use crate::common::render_batch::RenderBatch;
+use crate::common::scene::Scene;
+use crate::gpu::instance::GpuInstance;
 
 struct VulkanContext {
     window: Arc<Window>,
@@ -57,6 +65,9 @@ struct VulkanContext {
     pipeline: Arc<GraphicsPipeline>,
     cmd_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
     mesh_registry: Arc<MeshRegistry>,
+    instance_registry: Arc<InstanceRegistry>,
+    camera: Arc<Camera>,
+    camera_resources: Arc<CameraResources>,
 }
 
 impl VulkanContext {
@@ -156,6 +167,10 @@ impl VulkanContext {
         let framebuffers = Self::create_framebuffers(&images, &render_pass)?;
 
         let image_extents = swapchain.image_extent();
+
+        // Create the camera.
+        let camera = Arc::new(Camera::new(image_extents));
+
         let pipeline = Self::create_pipeline(
             &device,
             &vert_shader,
@@ -164,57 +179,42 @@ impl VulkanContext {
             [image_extents[0] as f32, image_extents[1] as f32],
         )?;
 
-        let vertex_buffer = Arc::new(Buffer::from_iter(
-            mem_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::VERTEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_HOST
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            vec![
-                Vertex3 {
-                    position: [0.5, 0.5, 0.0],
-                },
-                Vertex3 {
-                    position: [-0.5, 0.5, 0.0],
-                },
-                Vertex3 {
-                    position: [-0.5, -0.5, 0.0],
-                },
-                Vertex3 {
-                    position: [0.5, -0.5, 0.0],
-                },
-            ],
-        )?);
+        // Get descriptor set layout
+        let pipeline_layout = pipeline.layout().clone();
+        let desc_set_layout = pipeline_layout.set_layouts()[0].clone();
 
-        let index_buffer = Arc::new(Buffer::from_iter(
+        // Create GPU-based camera resources
+        let camera_resources = CameraResources::new(
             mem_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::INDEX_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_HOST
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            vec![0, 1, 2, 0, 2, 3],
-        )?);
+            desc_allocator.clone(),
+            desc_set_layout
+        );
+
+        let scene = Scene::from_file_json("./test_scene.scene");
+        let mesh_registry = Arc::new(MeshRegistry::from_scene(
+            &scene,
+            mem_allocator.clone()
+        ));
+        let instance_registry = Arc::new(InstanceRegistry::from_scene(
+            &scene
+        ));
+
+        // Construct render batches each frame, starting with once here.
+        let batches = RenderBatch::build_batches(
+            mem_allocator.clone(),
+            mesh_registry.clone(),
+            instance_registry.clone()
+        );
 
         let cmd_buffers = Self::get_command_buffers(
             &cmd_allocator,
             &queue,
             &pipeline,
             &framebuffers,
-            &vertex_buffer,
-            &index_buffer,
+            camera_resources.descriptor_set(),
+            mesh_registry.clone(),
+            batches,
         )?;
-
-        let mesh_registry = Arc::new(MeshRegistry::new(mem_allocator.clone())?);
 
         Ok(Self {
             window,
@@ -232,6 +232,9 @@ impl VulkanContext {
             pipeline,
             cmd_buffers,
             mesh_registry,
+            instance_registry,
+            camera,
+            camera_resources
         })
     }
 
@@ -364,7 +367,8 @@ impl VulkanContext {
             .entry_point("main")
             .ok_or("Failed to find fragment shader entry point")?;
 
-        let vertex_input_state = Vertex3::per_vertex().definition(&vs)?;
+        let vertex_input_state = [Vertex3::per_vertex(), GpuInstance::per_instance()]
+            .definition(&vs)?;
 
         let stages = vec![
             PipelineShaderStageCreateInfo::new(vs),
@@ -417,8 +421,9 @@ impl VulkanContext {
         queue: &Arc<Queue>,
         pipeline: &Arc<GraphicsPipeline>,
         framebuffers: &Vec<Arc<Framebuffer>>,
-        vertex_buffer: &Arc<Subbuffer<[Vertex3]>>,
-        index_buffer: &Subbuffer<[u32]>,
+        camera_desc_set: Arc<DescriptorSet>,
+        mesh_registry: Arc<MeshRegistry>,
+        render_batches: Vec<RenderBatch>,
     ) -> Result<Vec<Arc<PrimaryAutoCommandBuffer>>, Box<dyn Error>> {
         let buffers = framebuffers
             .iter()
@@ -428,7 +433,7 @@ impl VulkanContext {
                     queue.queue_family_index(),
                     CommandBufferUsage::MultipleSubmit,
                 )
-                .ok()?;
+                    .expect("Couldn't create command buffer builder");
 
                 unsafe {
                     builder
@@ -442,18 +447,36 @@ impl VulkanContext {
                                 ..Default::default()
                             },
                         )
-                        .ok()?
+                        .unwrap()
+                        .bind_descriptor_sets(
+                            PipelineBindPoint::Graphics,
+                            pipeline.layout().clone(),
+                            0,
+                            camera_desc_set.clone(),
+                        )
+                        .unwrap()
                         .bind_pipeline_graphics(pipeline.clone())
-                        .ok()?
-                        .bind_vertex_buffers(0, vertex_buffer.as_ref().clone())
-                        .ok()?
-                        .bind_index_buffer(index_buffer.clone())
-                        .ok()?
-                        // .draw(vertex_buffer.len() as u32, 1, 0, 0).ok()?
-                        .draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0)
-                        .ok()?
+                        .unwrap()
+                        .bind_vertex_buffers(0, mesh_registry.vertex_buffer.as_ref().clone())
+                        .unwrap()
+                        .bind_index_buffer(mesh_registry.index_buffer.as_ref().clone())
+                        .unwrap();
+
+                    render_batches.iter().for_each(|batch| {
+                        // Grab mesh information
+                        let mesh = mesh_registry.get(&batch.mesh_id)
+                            .expect("Mesh does not exist in registry");
+
+                        builder
+                            .bind_vertex_buffers(1, batch.instance_buffer.clone())
+                            .unwrap()
+                            .draw_indexed(mesh.index_count as u32, batch.instance_count, mesh.index_loc as u32, mesh.vertex_loc as i32, 0)
+                            .unwrap();
+                    });
+
+                    builder
                         .end_render_pass(SubpassEndInfo::default())
-                        .ok()?;
+                        .unwrap();
                 }
 
                 builder.build().ok()
@@ -496,13 +519,20 @@ impl VulkanContext {
                 [image_extents[0] as f32, image_extents[1] as f32],
             )?;
 
+            let batches = RenderBatch::build_batches(
+                self.mem_allocator.clone(),
+                self.mesh_registry.clone(),
+                self.instance_registry.clone()
+            );
+
             let command_buffers = Self::get_command_buffers(
                 &self.cmd_allocator,
                 &self.queue,
                 &new_pipeline,
                 &self.framebuffers,
-                &self.mesh_registry.vertex_buffer,
-                &self.mesh_registry.index_buffer,
+                self.camera_resources.descriptor_set(),
+                self.mesh_registry.clone(),
+                batches
             )?;
 
             self.pipeline = new_pipeline;

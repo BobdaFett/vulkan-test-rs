@@ -32,7 +32,7 @@ impl Mesh {}
 /// used by the rendering pipeline.
 #[derive(Debug)]
 pub struct MeshRegistry {
-    meshes: HashMap<String, Mesh>,
+    pub meshes: HashMap<String, Mesh>,
     allocator: Arc<dyn MemoryAllocator>,
     pub vertex_buffer: Arc<Subbuffer<[Vertex3]>>,
     pub index_buffer: Arc<Subbuffer<[u32]>>,
@@ -67,7 +67,7 @@ impl MeshRegistry {
             let vert_start = verts.len();
             let all_verts = obj.vertices();
             let vert_len = all_verts.len();
-            verts.extend(all_verts.map(|v| Vertex3::from(v.position())));
+            verts.extend(all_verts.map(|v| Vertex3::new(v.position(), v.normal().unwrap_or_default())));
 
             let index_list = obj
                 .triangles()
@@ -156,7 +156,7 @@ impl MeshRegistry {
     }
 
     /// Attempts to find a [`Mesh`] with the given ID, returning `None` if it's not found.
-    pub fn get(&self, uuid: &str) -> Option<&Mesh> {
+    pub fn get(&self, uuid: &String) -> Option<&Mesh> {
         self.meshes.get(uuid)
     }
 }

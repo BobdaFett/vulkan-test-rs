@@ -13,3 +13,4 @@ winit = "0.30.13"
 nalgebra = "*"
 uuid = { version = "1.23.1", features = ["v4"] }
 postcard = { version = "1.1", features = ["alloc"] }
+serde_json = "1.0.149"

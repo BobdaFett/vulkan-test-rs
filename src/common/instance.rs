@@ -1,4 +1,5 @@
-use crate::common::scene::SceneInstance;
+use std::collections::HashMap;
+use crate::common::scene::{Scene, SceneInstance};
 use nalgebra::{Matrix4, Vector3, Vector4};
 
 /// Contains all information about an instance of a mesh, specifically its translation, rotation,
@@ -9,9 +10,8 @@ use nalgebra::{Matrix4, Vector3, Vector4};
 ///
 /// Before passing this instance into the shaders, construct a transformation matrix by calling
 /// [`MeshInstance::transform_matrix`].
+#[derive(Debug, Clone)]
 pub struct MeshInstance {
-    /// The ID of the mesh corresponding to this instance.
-    pub mesh_id: String,
     /// The translation of the instance from the center of the standard space. It is possible that
     /// local translation will be required in the future.
     pub translation: Vector4<f32>,
@@ -35,21 +35,47 @@ impl MeshInstance {
             Matrix4::from_axis_angle(&Vector3::z_axis(), self.rotation.z) *
             Matrix4::new_nonuniform_scaling(&self.scale)
     }
+}
 
-    /// Constructs a `MeshInstance` from the given [`SceneInstance`] and mesh ID.
-    fn from_scene_instance(
-        mesh_id: String,
-        SceneInstance {
-            translation,
-            rotation,
-            scale,
-        }: SceneInstance,
-    ) -> Self {
+impl From<SceneInstance> for MeshInstance {
+    fn from(instance: SceneInstance) -> Self {
+        Self::from(&instance)
+    }
+}
+
+impl From<&SceneInstance> for MeshInstance {
+    fn from(SceneInstance { translation, rotation, scale }: &SceneInstance) -> Self {
         Self {
-            mesh_id,
-            translation: Vector3::from(translation).to_homogeneous(),
-            rotation: Vector3::from(rotation).to_homogeneous(),
-            scale: Vector3::from(scale),
+            translation: Vector3::from(*translation).to_homogeneous(),
+            rotation: Vector3::from(*rotation).to_homogeneous(),
+            scale: Vector3::from(*scale),
         }
+    }
+}
+
+/// A registry containing a series of `MeshInstance` structs linked to a mesh ID.
+pub struct InstanceRegistry {
+    instances: HashMap<String, Vec<MeshInstance>>,
+}
+
+impl InstanceRegistry {
+    pub fn from_scene(scene: &Scene) -> Self {
+        // Read information about the instances from the scene.
+        let instances: HashMap<String, Vec<MeshInstance>> = scene.instances.iter()
+            .fold(HashMap::new(), |mut map, (mesh_id, instance)| {
+                map.entry(mesh_id.clone())
+                    .and_modify(|v| v.push(instance.into()))
+                    .or_insert(vec![instance.into()]);
+                map
+            });
+
+        Self {
+            instances
+        }
+    }
+
+    pub fn get_instances_for(&self, mesh_id: &String) -> Vec<MeshInstance> {
+        // We can't move these instances because we'll want them again later.
+        self.instances.get(mesh_id).cloned().unwrap_or_default()
     }
 }

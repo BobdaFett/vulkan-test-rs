@@ -3,7 +3,7 @@ use vulkano::buffer::BufferContents;
 use vulkano::pipeline::graphics::vertex_input::Vertex;
 
 /// A transformation matrix for a mesh that can be passed into the shaders.
-#[derive(BufferContents, Vertex)]
+#[derive(Debug, Clone, BufferContents, Vertex)]
 #[repr(C)]
 pub struct GpuInstance {
     #[format(R32G32B32A32_SFLOAT)]
