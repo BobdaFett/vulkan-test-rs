@@ -11,7 +11,7 @@ use crate::gpu::camera::CameraUniform;
 /// A camera set within 3D space.
 pub struct Camera {
     /// The position of the camera.
-    position: Vector3<f32>,
+    pub position: Vector3<f32>,
     /// The forward direction of the camera.
     forward: Vector3<f32>,
     /// The upward direction of the camera.
@@ -31,17 +31,20 @@ impl Camera {
         extents: impl Into<Vector2<u32>>
     ) -> Self {
         let extents = extents.into();
-        let position = Vector3::new(1.0, 1.0, 1.0);
+        let position = Vector3::new(20.0, 20.0, 20.0);
         let target = Vector3::zeros();
 
-        // Traveling along this vector moves us upward.
-        let up = Vector3::new(0.0, 1.0, 0.0);
+        // Traveling along this vector moves us toward the target.
+        let forward = (target - position).normalize();
+
+        // A world up vector.
+        let up_world = Vector3::y_axis();
 
         // Traveling along this vector moves us to the right.
-        let right = up.cross(&(position - target)).normalize();
+        let right = up_world.cross(&forward).normalize();
 
-        // Traveling along this vector moves us toward the target.
-        let forward = target - position;
+        // Traveling along this vector moves us upward.
+        let up = forward.cross(&right).normalize();
 
         Self {
             position,
@@ -55,17 +58,17 @@ impl Camera {
 
     /// Moves the camera forward, or backward if given negative speed.
     pub fn move_forward(&mut self, speed: f32) {
-        self.forward += self.forward * speed;
+        self.position += self.forward * speed;
     }
 
     /// Moves the camera to the right, or left if given negative speed.
     pub fn move_right(&mut self, speed: f32) {
-        self.right += self.right * speed;
+        self.position += self.right * speed;
     }
 
     /// Moves the camera upwards, or downward if given negative speed.
     pub fn move_up(&mut self, speed: f32) {
-        self.up += self.up * speed;
+        self.position += self.up * speed;
     }
 
     /// Sets the extents of the viewport.

@@ -1,7 +1,7 @@
 {
   "name": "Testing Scene",
   "mesh_paths": {
-    "gunship": "laat_gunship/laat.obj"
+    "gunship": "laat_gunship/scene.obj"
   },
   "instances": {
     "gunship": {

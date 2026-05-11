@@ -58,16 +58,21 @@ impl MeshRegistry {
             })
             .collect::<HashMap<String, Obj>>();
 
-        let mut verts = Vec::new();
-        let mut indices = Vec::new();
+        let mut buf_verts = Vec::new();
+        let mut buf_indices = Vec::new();
         let mut mesh_list = HashMap::new();
         meshes.into_iter().for_each(|(id, obj)| {
             // Information will be added directly to the verts and indices vectors, and a new Mesh
             // struct will be created and inserted into the mesh_list.
-            let vert_start = verts.len();
-            let all_verts = obj.vertices();
-            let vert_len = all_verts.len();
-            verts.extend(all_verts.map(|v| Vertex3::new(v.position(), v.normal().unwrap_or_default())));
+            let vert_start = buf_verts.len();
+            let all_verts = obj.positions();
+            let all_norms = obj.normals();
+            let obj_num_verts = all_verts.len();
+            all_verts.iter().zip(all_norms.iter())
+                .for_each(|(pos, norm)| {
+                    buf_verts.push(Vertex3::new(*pos, *norm));
+                });
+            // buf_verts.extend(all_verts.map(|v| Vertex3::new(v.position(), v.normal().unwrap_or_default())));
 
             let index_list = obj
                 .triangles()
@@ -77,9 +82,11 @@ impl MeshRegistry {
                         .collect::<Vec<u32>>()
                 })
                 .collect::<Vec<u32>>();
-            let index_start = indices.len();
-            let index_len = index_list.len();
-            indices.extend(index_list);
+            let index_start = buf_indices.len();
+            let obj_num_idx = index_list.len();
+            buf_indices.extend(index_list);
+
+            println!("Loaded mesh {} with {} vertices and {} indices", id, obj_num_verts, obj_num_idx);
 
             // TODO Create bounding boxes for each mesh and associate them with the struct.
             mesh_list.insert(
@@ -87,16 +94,16 @@ impl MeshRegistry {
                 Mesh {
                     id,
                     vertex_loc: vert_start,
-                    vertex_count: vert_len,
+                    vertex_count: obj_num_verts,
                     index_loc: index_start,
-                    index_count: index_len,
+                    index_count: obj_num_idx,
                 },
             );
         });
 
         // Allocate buffers for the information.
-        let vertex_buffer = Self::alloc_vert_buffer(allocator.clone(), verts);
-        let index_buffer = Self::alloc_index_buffer(allocator.clone(), indices);
+        let vertex_buffer = Self::alloc_vert_buffer(allocator.clone(), buf_verts);
+        let index_buffer = Self::alloc_index_buffer(allocator.clone(), buf_indices);
 
         // Finally, return the struct.
         Self {

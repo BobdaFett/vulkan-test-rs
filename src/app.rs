@@ -66,7 +66,7 @@ struct VulkanContext {
     cmd_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
     mesh_registry: Arc<MeshRegistry>,
     instance_registry: Arc<InstanceRegistry>,
-    camera: Arc<Camera>,
+    camera: Camera,
     camera_resources: Arc<CameraResources>,
 }
 
@@ -169,7 +169,7 @@ impl VulkanContext {
         let image_extents = swapchain.image_extent();
 
         // Create the camera.
-        let camera = Arc::new(Camera::new(image_extents));
+        let camera = Camera::new(image_extents);
 
         let pipeline = Self::create_pipeline(
             &device,
@@ -240,6 +240,8 @@ impl VulkanContext {
 
     /// Draws a frame on the current [`Surface`].
     pub fn draw_frame(&mut self) -> Result<(), Box<dyn Error>> {
+        self.camera.move_right(0.1);
+        self.camera_resources.update(&self.camera);
         let (image_idx, suboptimal, acquire_future) =
             match swapchain::acquire_next_image(self.swapchain.clone(), None)
                 .map_err(Validated::unwrap)
@@ -260,17 +262,35 @@ impl VulkanContext {
             self.recreate_swapchain(false)?
         }
 
-        let execution = sync::now(self.device.clone())
+        // Rebuild command buffers
+        let cmd_buffers = Self::get_command_buffers(
+            &self.cmd_allocator,
+            &self.queue,
+            &self.pipeline,
+            &self.framebuffers,
+            self.camera_resources.descriptor_set(),
+            self.mesh_registry.clone(),
+            RenderBatch::build_batches(
+                self.mem_allocator.clone(),
+                self.mesh_registry.clone(),
+                self.instance_registry.clone()
+            )
+        )?;
+
+        let future = sync::now(self.device.clone())
             .join(acquire_future)
             .then_execute(
                 self.queue.clone(),
-                self.cmd_buffers[image_idx as usize].clone(),
+                cmd_buffers[image_idx as usize].clone(),
             )?
             .then_swapchain_present(
                 self.queue.clone(),
                 SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_idx),
             )
-            .then_signal_fence_and_flush();
+            .then_signal_fence_and_flush()
+            .map_err(|e| format!("Failed to draw frame: {e}"))?;
+
+        future.wait(None)?;
 
         Ok(())
     }
@@ -431,7 +451,7 @@ impl VulkanContext {
                 let mut builder = AutoCommandBufferBuilder::primary(
                     cmd_allocator.clone(),
                     queue.queue_family_index(),
-                    CommandBufferUsage::MultipleSubmit,
+                    CommandBufferUsage::OneTimeSubmit,
                 )
                     .expect("Couldn't create command buffer builder");
 
@@ -495,8 +515,10 @@ impl VulkanContext {
             self.device.wait_idle()?;
         };
 
+        let image_extents = self.swapchain.image_extent();
+
         let (new_swapchain, new_images) = self.swapchain.recreate(SwapchainCreateInfo {
-            image_extent: self.window.inner_size().into(),
+            image_extent: image_extents.clone().into(),
             ..self.swapchain.create_info()
         })?;
 
@@ -510,7 +532,6 @@ impl VulkanContext {
         self.framebuffers = new_framebuffers;
 
         if resized {
-            let image_extents = self.swapchain.image_extent();
             let new_pipeline = Self::create_pipeline(
                 &self.device,
                 &self.vert_shader,
@@ -518,6 +539,8 @@ impl VulkanContext {
                 &self.render_pass,
                 [image_extents[0] as f32, image_extents[1] as f32],
             )?;
+
+            self.camera.extents(image_extents);
 
             let batches = RenderBatch::build_batches(
                 self.mem_allocator.clone(),

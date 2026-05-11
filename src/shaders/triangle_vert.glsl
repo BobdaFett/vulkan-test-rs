@@ -11,11 +11,6 @@ layout(location = 4) in vec4 transform_col3;
 layout(location = 5) in vec4 transform_col4;
 
 // Per-frame information - CameraUniform struct
-//layout(location = 6) uniform vec4 proj_col1;
-//layout(location = 7) uniform vec4 proj_col2;
-//layout(location = 8) uniform vec4 proj_col3;
-//layout(location = 9) uniform vec4 proj_col4;
-
 layout(set = 0, binding = 0) uniform CameraUniform {
     mat4 view;
     mat4 projection;
@@ -24,9 +19,8 @@ layout(set = 0, binding = 0) uniform CameraUniform {
 void main() {
     // We then multiply each vertex by its transform to find the correct location in the scene.
     mat4 transform = mat4(transform_col1, transform_col2, transform_col3, transform_col4);
-    //mat4 proj = mat4(proj_col1, proj_col2, proj_col3, proj_col4);
 
     mat4 mvp = camera.projection * camera.view * transform;
 
-    gl_Position = transform * vec4(position, 1.0f);
+    gl_Position = mvp * vec4(position, 1.0f);
 }
