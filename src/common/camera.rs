@@ -6,6 +6,7 @@ use vulkano::descriptor_set::allocator::DescriptorSetAllocator;
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
 use vulkano::descriptor_set::layout::DescriptorSetLayout;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter};
+use vulkano::pipeline::graphics::viewport::Viewport;
 use crate::gpu::camera::CameraUniform;
 
 /// A camera set within 3D space.
@@ -31,7 +32,7 @@ impl Camera {
         extents: impl Into<Vector2<u32>>
     ) -> Self {
         let extents = extents.into();
-        let position = Vector3::new(20.0, 20.0, 20.0);
+        let position = Vector3::new(-10.0, 10.0, -10.0);
         let target = Vector3::zeros();
 
         // Traveling along this vector moves us toward the target.
@@ -91,12 +92,27 @@ impl Camera {
     pub fn get_projection(&self) -> Matrix4<f32> {
         let aspect = self.extents.x as f32 / self.extents.y as f32;
 
-        Matrix4::new_perspective(
+        let mut proj = Matrix4::new_perspective(
             aspect,
             self.fov,
             1.0,
             10000.0
-        )
+        );
+
+        // Flip the y-axis, since Vulkan uses a different coordinate system.
+        proj[(1, 1)] *= -1.0;
+
+        proj
+    }
+
+    /// Creates a [`Viewport`] based on the current extents.
+    pub fn viewport(&self) -> Viewport {
+        let extent = self.extents.map(|v| v as f32).into();
+        Viewport {
+            offset: [0.0, 0.0],
+            extent,
+            depth_range: 0.0..=1.0,
+        }
     }
 }
 

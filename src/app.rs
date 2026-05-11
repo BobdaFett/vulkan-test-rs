@@ -31,7 +31,7 @@ use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
-use vulkano::pipeline::{GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
+use vulkano::pipeline::{DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass};
 use vulkano::shader::ShaderModule;
 use vulkano::swapchain::{Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo};
@@ -211,7 +211,8 @@ impl VulkanContext {
             &queue,
             &pipeline,
             &framebuffers,
-            camera_resources.descriptor_set(),
+            &camera,
+            &camera_resources,
             mesh_registry.clone(),
             batches,
         )?;
@@ -240,7 +241,7 @@ impl VulkanContext {
 
     /// Draws a frame on the current [`Surface`].
     pub fn draw_frame(&mut self) -> Result<(), Box<dyn Error>> {
-        self.camera.move_right(0.1);
+        // self.camera.move_right(0.1);
         self.camera_resources.update(&self.camera);
         let (image_idx, suboptimal, acquire_future) =
             match swapchain::acquire_next_image(self.swapchain.clone(), None)
@@ -268,7 +269,8 @@ impl VulkanContext {
             &self.queue,
             &self.pipeline,
             &self.framebuffers,
-            self.camera_resources.descriptor_set(),
+            &self.camera,
+            &self.camera_resources,
             self.mesh_registry.clone(),
             RenderBatch::build_batches(
                 self.mem_allocator.clone(),
@@ -404,11 +406,8 @@ impl VulkanContext {
                 .into_pipeline_layout_create_info(device.clone())?,
         )?;
 
-        let viewport = Viewport {
-            offset: [0.0, 0.0],
-            extent: extents,
-            depth_range: 0.0..=1.0,
-        };
+        // This is a default viewport. It will be updated later via the camera struct in the context.
+        let viewport = Viewport::default();
 
         Ok(GraphicsPipeline::new(
             device.clone(),
@@ -428,7 +427,7 @@ impl VulkanContext {
                     subpass.num_color_attachments(),
                     ColorBlendAttachmentState::default(),
                 )),
-                dynamic_state: Default::default(),
+                dynamic_state: [DynamicState::Viewport].into_iter().collect(),
                 subpass: Some(subpass.into()),
                 ..GraphicsPipelineCreateInfo::layout(layout)
             },
@@ -441,7 +440,8 @@ impl VulkanContext {
         queue: &Arc<Queue>,
         pipeline: &Arc<GraphicsPipeline>,
         framebuffers: &Vec<Arc<Framebuffer>>,
-        camera_desc_set: Arc<DescriptorSet>,
+        camera: &Camera,
+        camera_resources: &CameraResources,
         mesh_registry: Arc<MeshRegistry>,
         render_batches: Vec<RenderBatch>,
     ) -> Result<Vec<Arc<PrimaryAutoCommandBuffer>>, Box<dyn Error>> {
@@ -468,11 +468,16 @@ impl VulkanContext {
                             },
                         )
                         .unwrap()
+                        .set_viewport(
+                            0,
+                            [camera.viewport()].into_iter().collect()
+                        )
+                        .unwrap()
                         .bind_descriptor_sets(
                             PipelineBindPoint::Graphics,
                             pipeline.layout().clone(),
                             0,
-                            camera_desc_set.clone(),
+                            camera_resources.descriptor_set().clone(),
                         )
                         .unwrap()
                         .bind_pipeline_graphics(pipeline.clone())
@@ -515,7 +520,7 @@ impl VulkanContext {
             self.device.wait_idle()?;
         };
 
-        let image_extents = self.swapchain.image_extent();
+        let image_extents = self.window.inner_size();
 
         let (new_swapchain, new_images) = self.swapchain.recreate(SwapchainCreateInfo {
             image_extent: image_extents.clone().into(),
@@ -537,10 +542,10 @@ impl VulkanContext {
                 &self.vert_shader,
                 &self.frag_shader,
                 &self.render_pass,
-                [image_extents[0] as f32, image_extents[1] as f32],
+                [image_extents.width as f32, image_extents.height as f32],
             )?;
 
-            self.camera.extents(image_extents);
+            self.camera.extents([image_extents.width, image_extents.height]);
 
             let batches = RenderBatch::build_batches(
                 self.mem_allocator.clone(),
@@ -553,7 +558,8 @@ impl VulkanContext {
                 &self.queue,
                 &new_pipeline,
                 &self.framebuffers,
-                self.camera_resources.descriptor_set(),
+                &self.camera,
+                &self.camera_resources,
                 self.mesh_registry.clone(),
                 batches
             )?;
