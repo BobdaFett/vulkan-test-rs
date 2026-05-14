@@ -15,9 +15,9 @@ layout(location = 0) out vec4 f_color;
 
 void main() {
     // Default mesh color - no textures for now.
-    vec3 objectColor = vec3(0.1, 0.1, 0.1);
+    vec3 objectColor = vec3(0.5, 0.5, 0.5);
     // Default light information - we aren't going to edit light information until we know more about it.
-    vec3 lightPosition = vec3(0.0, 10000.0, 0.0);
+    vec3 lightPosition = vec3(-100.0, 200.0, 200.0);
     vec3 lightColor = vec3(1.0, 1.0, 1.0);
 
     // Ambient lighting - literally just a base color percentage.

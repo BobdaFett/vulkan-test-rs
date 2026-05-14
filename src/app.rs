@@ -1,4 +1,3 @@
-use std::alloc::Layout;
 use crate::common::mesh::MeshRegistry;
 use crate::gpu::vertex3::Vertex3;
 use crate::triangle;
@@ -16,10 +15,10 @@ use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::device::{
     Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
 };
-use vulkano::image::view::{ImageView, ImageViewCreateInfo};
-use vulkano::image::{Image, ImageAspects, ImageCreateInfo, ImageLayout, ImageSubresourceRange, ImageType, ImageUsage};
+use vulkano::image::view::ImageView;
+use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions};
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator};
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, StandardMemoryAllocator};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
@@ -34,8 +33,7 @@ use vulkano::shader::ShaderModule;
 use vulkano::swapchain::{Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::sync::GpuFuture;
 use vulkano::{Validated, VulkanError, VulkanLibrary, swapchain, sync};
-use vulkano::format::{ClearValue, Format};
-use vulkano::memory::MemoryType;
+use vulkano::format::Format;
 use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -183,7 +181,6 @@ impl VulkanContext {
             &vert_shader,
             &frag_shader,
             &render_pass,
-            [image_extents[0] as f32, image_extents[1] as f32],
         )?;
 
         // Get descriptor set layout
@@ -205,13 +202,6 @@ impl VulkanContext {
         let instance_registry = Arc::new(InstanceRegistry::from_scene(
             &scene
         ));
-
-        // Construct render batches each frame, starting with once here.
-        let batches = RenderBatch::build_batches(
-            mem_allocator.clone(),
-            mesh_registry.clone(),
-            instance_registry.clone()
-        );
 
         Ok(Self {
             window,
@@ -389,7 +379,6 @@ impl VulkanContext {
         vert_shader: &Arc<ShaderModule>,
         frag_shader: &Arc<ShaderModule>,
         render_pass: &Arc<RenderPass>,
-        extents: [f32; 2],
     ) -> Result<Arc<GraphicsPipeline>, Box<dyn Error>> {
         // Get shader stages
         let vs = vert_shader
@@ -447,7 +436,8 @@ impl VulkanContext {
         )?)
     }
 
-    /// Creates a [`PrimaryAutoCommandBuffer`] for each swapchain image.
+    /// Creates a [`PrimaryAutoCommandBuffer`] for the given framebuffer, render pass, and queue.
+    /// This is used to pass instructions to draw a frame.
     fn get_command_buffer(
         cmd_allocator: &Arc<StandardCommandBufferAllocator>,
         queue: &Arc<Queue>,
@@ -518,6 +508,7 @@ impl VulkanContext {
     /// bounds. Will also handle resizing logic, as this requires extra information to be updated,
     /// specifically the [`GraphicsPipeline`] and [`PrimaryAutoCommandBuffer`]. All information is
     /// automatically set within the `VulkanContext`.
+    // TODO Define a function that handles creation of all information related to the size of the window.
     pub fn recreate_swapchain(&mut self, resized: bool) -> Result<(), Box<dyn Error>> {
         unsafe {
             self.device.wait_idle()?;
@@ -549,16 +540,9 @@ impl VulkanContext {
                 &self.vert_shader,
                 &self.frag_shader,
                 &self.render_pass,
-                [image_extents.width as f32, image_extents.height as f32],
             )?;
 
             self.camera.extents([image_extents.width, image_extents.height]);
-
-            let batches = RenderBatch::build_batches(
-                self.mem_allocator.clone(),
-                self.mesh_registry.clone(),
-                self.instance_registry.clone()
-            );
 
             self.pipeline = new_pipeline;
         }
@@ -567,12 +551,12 @@ impl VulkanContext {
     }
 }
 
-pub struct MainApplication {
+pub struct App {
     instance: Arc<Instance>,
     context: Option<VulkanContext>,
 }
 
-impl MainApplication {
+impl App {
     pub fn new(instance_extensions: InstanceExtensions) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             instance: Self::get_instance(instance_extensions)?,
@@ -608,7 +592,7 @@ impl MainApplication {
     }
 }
 
-impl ApplicationHandler for MainApplication {
+impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.context.is_none().then(|| {
             // Initialization logic
@@ -622,7 +606,7 @@ impl ApplicationHandler for MainApplication {
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        window_id: WindowId,
+        _window_id: WindowId,
         event: WindowEvent,
     ) {
         match event {

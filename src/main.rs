@@ -3,12 +3,12 @@ mod common;
 pub mod gpu;
 // pub mod math;
 
-use crate::app::MainApplication;
+use crate::app::App;
 use std::error::Error;
 use vulkano::swapchain::Surface;
 use winit::event_loop::{ControlFlow, EventLoop};
 
-// Compute shader compilation. Happens at runtime, but file contents are included during compilation.
+// Shader compilation. Happens at runtime, but file contents are included during compilation.
 mod cs {
     vulkano_shaders::shader! {
         ty: "compute",
@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let required_extensions = Surface::required_extensions(&event_loop)?;
 
     // Create and start the window.
-    let mut app = MainApplication::new(required_extensions)?;
+    let mut app = App::new(required_extensions)?;
     event_loop.set_control_flow(ControlFlow::Wait);
     event_loop.run_app(&mut app)?;
 
