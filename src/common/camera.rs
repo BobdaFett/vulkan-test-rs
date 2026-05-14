@@ -32,7 +32,7 @@ impl Camera {
         extents: impl Into<Vector2<u32>>
     ) -> Self {
         let extents = extents.into();
-        let position = Vector3::new(-10.0, 10.0, -10.0);
+        let position = Vector3::new(-7.0, 7.0, -7.0);
         let target = Vector3::zeros();
 
         // Traveling along this vector moves us toward the target.

@@ -1,10 +1,9 @@
-use std::collections::HashMap;
+use std::alloc::Layout;
 use crate::common::mesh::MeshRegistry;
 use crate::gpu::vertex3::Vertex3;
 use crate::triangle;
 use std::error::Error;
 use std::sync::Arc;
-use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::{
     StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo,
 };
@@ -17,12 +16,10 @@ use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::device::{
     Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
 };
-use vulkano::image::view::ImageView;
-use vulkano::image::{Image, ImageUsage};
+use vulkano::image::view::{ImageView, ImageViewCreateInfo};
+use vulkano::image::{Image, ImageAspects, ImageCreateInfo, ImageLayout, ImageSubresourceRange, ImageType, ImageUsage};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions};
-use vulkano::memory::allocator::{
-    AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator,
-};
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
@@ -37,8 +34,9 @@ use vulkano::shader::ShaderModule;
 use vulkano::swapchain::{Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::sync::GpuFuture;
 use vulkano::{Validated, VulkanError, VulkanLibrary, swapchain, sync};
-use vulkano::descriptor_set::DescriptorSet;
-use vulkano::descriptor_set::layout::DescriptorSetLayout;
+use vulkano::format::{ClearValue, Format};
+use vulkano::memory::MemoryType;
+use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
@@ -63,7 +61,6 @@ struct VulkanContext {
     render_pass: Arc<RenderPass>,
     framebuffers: Vec<Arc<Framebuffer>>,
     pipeline: Arc<GraphicsPipeline>,
-    cmd_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
     mesh_registry: Arc<MeshRegistry>,
     instance_registry: Arc<InstanceRegistry>,
     camera: Camera,
@@ -150,12 +147,18 @@ impl VulkanContext {
                     format: swapchain.image_format(),
                     samples: 1,
                     load_op: Clear,
-                    store_op: Store,
+                    store_op: Store
+                },
+                depth: {
+                    format: Format::D16_UNORM,
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: DontCare,
                 }
             },
             pass: {
                 color: [color],
-                depth_stencil: {},
+                depth_stencil: {depth},
             }
         )?;
 
@@ -164,7 +167,11 @@ impl VulkanContext {
         let frag_shader = triangle::load_fragment(device.clone())
             .map_err(|e| format!("Failed to load fragment shader: {e}"))?;
 
-        let framebuffers = Self::create_framebuffers(&images, &render_pass)?;
+        let framebuffers = Self::create_framebuffers(
+            mem_allocator.clone(),
+            &images,
+            &render_pass
+        )?;
 
         let image_extents = swapchain.image_extent();
 
@@ -206,17 +213,6 @@ impl VulkanContext {
             instance_registry.clone()
         );
 
-        let cmd_buffers = Self::get_command_buffers(
-            &cmd_allocator,
-            &queue,
-            &pipeline,
-            &framebuffers,
-            &camera,
-            &camera_resources,
-            mesh_registry.clone(),
-            batches,
-        )?;
-
         Ok(Self {
             window,
             device,
@@ -231,7 +227,6 @@ impl VulkanContext {
             frag_shader,
             framebuffers,
             pipeline,
-            cmd_buffers,
             mesh_registry,
             instance_registry,
             camera,
@@ -264,11 +259,11 @@ impl VulkanContext {
         }
 
         // Rebuild command buffers
-        let cmd_buffers = Self::get_command_buffers(
+        let cmd_buffer = Self::get_command_buffer(
             &self.cmd_allocator,
             &self.queue,
             &self.pipeline,
-            &self.framebuffers,
+            self.framebuffers[image_idx as usize].clone(),
             &self.camera,
             &self.camera_resources,
             self.mesh_registry.clone(),
@@ -283,7 +278,7 @@ impl VulkanContext {
             .join(acquire_future)
             .then_execute(
                 self.queue.clone(),
-                cmd_buffers[image_idx as usize].clone(),
+                cmd_buffer.clone(),
             )?
             .then_swapchain_present(
                 self.queue.clone(),
@@ -350,9 +345,24 @@ impl VulkanContext {
 
     /// Creates a new [`Framebuffer`] for each swapchain image.
     fn create_framebuffers(
+        alloc: Arc<dyn MemoryAllocator>,
         images: &Vec<Arc<Image>>,
         render_pass: &Arc<RenderPass>,
     ) -> Result<Vec<Arc<Framebuffer>>, Box<dyn Error>> {
+        let depth_buffer = ImageView::new_default(
+            Image::new(
+                alloc.clone(),
+                ImageCreateInfo {
+                    image_type: ImageType::Dim2d,
+                    format: Format::D16_UNORM,
+                    extent: images[0].extent(),
+                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+                    ..Default::default()
+                },
+                AllocationCreateInfo::default()
+            )?
+        )?;
+
         let framebuffers = images
             .iter()
             .map(|image| {
@@ -361,7 +371,7 @@ impl VulkanContext {
                 Framebuffer::new(
                     render_pass.clone(),
                     FramebufferCreateInfo {
-                        attachments: vec![view],
+                        attachments: vec![view, depth_buffer.clone()],
                         ..Default::default()
                     },
                 )
@@ -413,7 +423,6 @@ impl VulkanContext {
             device.clone(),
             None,
             GraphicsPipelineCreateInfo {
-                flags: Default::default(),
                 stages: stages.into_iter().collect(),
                 vertex_input_state: Some(vertex_input_state),
                 input_assembly_state: Some(InputAssemblyState::default()),
@@ -429,86 +438,80 @@ impl VulkanContext {
                 )),
                 dynamic_state: [DynamicState::Viewport].into_iter().collect(),
                 subpass: Some(subpass.into()),
+                depth_stencil_state: Some(DepthStencilState {
+                    depth: Some(DepthState::simple()),
+                    ..Default::default()
+                }),
                 ..GraphicsPipelineCreateInfo::layout(layout)
             },
         )?)
     }
 
     /// Creates a [`PrimaryAutoCommandBuffer`] for each swapchain image.
-    fn get_command_buffers(
+    fn get_command_buffer(
         cmd_allocator: &Arc<StandardCommandBufferAllocator>,
         queue: &Arc<Queue>,
         pipeline: &Arc<GraphicsPipeline>,
-        framebuffers: &Vec<Arc<Framebuffer>>,
+        framebuffer: Arc<Framebuffer>,
         camera: &Camera,
         camera_resources: &CameraResources,
         mesh_registry: Arc<MeshRegistry>,
         render_batches: Vec<RenderBatch>,
-    ) -> Result<Vec<Arc<PrimaryAutoCommandBuffer>>, Box<dyn Error>> {
-        let buffers = framebuffers
-            .iter()
-            .filter_map(|framebuffer| {
-                let mut builder = AutoCommandBufferBuilder::primary(
-                    cmd_allocator.clone(),
-                    queue.queue_family_index(),
-                    CommandBufferUsage::OneTimeSubmit,
-                )
-                    .expect("Couldn't create command buffer builder");
+    ) -> Result<Arc<PrimaryAutoCommandBuffer>, Box<dyn Error>> {
+        let mut builder = AutoCommandBufferBuilder::primary(
+            cmd_allocator.clone(),
+            queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+            .expect("Couldn't create command buffer builder");
 
-                unsafe {
-                    builder
-                        .begin_render_pass(
-                            RenderPassBeginInfo {
-                                clear_values: vec![Some([0.1, 0.1, 0.1, 1.0].into())],
-                                ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
-                            },
-                            SubpassBeginInfo {
-                                contents: SubpassContents::Inline,
-                                ..Default::default()
-                            },
-                        )
-                        .unwrap()
-                        .set_viewport(
-                            0,
-                            [camera.viewport()].into_iter().collect()
-                        )
-                        .unwrap()
-                        .bind_descriptor_sets(
-                            PipelineBindPoint::Graphics,
-                            pipeline.layout().clone(),
-                            0,
-                            camera_resources.descriptor_set().clone(),
-                        )
-                        .unwrap()
-                        .bind_pipeline_graphics(pipeline.clone())
-                        .unwrap()
-                        .bind_vertex_buffers(0, mesh_registry.vertex_buffer.as_ref().clone())
-                        .unwrap()
-                        .bind_index_buffer(mesh_registry.index_buffer.as_ref().clone())
-                        .unwrap();
+        builder
+            .begin_render_pass(
+                RenderPassBeginInfo {
+                    clear_values: vec![
+                        Some([0.1, 0.1, 0.1, 0.5].into()),
+                        Some(1f32.into()),
+                    ],
+                    ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
+                },
+                SubpassBeginInfo {
+                    contents: SubpassContents::Inline,
+                    ..Default::default()
+                },
+            )?
+            .set_viewport(
+                0,
+                [camera.viewport()].into_iter().collect()
+            )?
+            .bind_descriptor_sets(
+                PipelineBindPoint::Graphics,
+                pipeline.layout().clone(),
+                0,
+                camera_resources.descriptor_set().clone(),
+            )?
+            .bind_pipeline_graphics(pipeline.clone())?
+            .bind_vertex_buffers(0, mesh_registry.vertex_buffer.as_ref().clone())?
+            .bind_index_buffer(mesh_registry.index_buffer.as_ref().clone())?;
 
-                    render_batches.iter().for_each(|batch| {
-                        // Grab mesh information
-                        let mesh = mesh_registry.get(&batch.mesh_id)
-                            .expect("Mesh does not exist in registry");
+        unsafe {
+            render_batches.iter().for_each(|batch| {
+                // Grab mesh information
+                let mesh = mesh_registry.get(&batch.mesh_id)
+                    .expect("Mesh does not exist in registry");
 
-                        builder
-                            .bind_vertex_buffers(1, batch.instance_buffer.clone())
-                            .unwrap()
-                            .draw_indexed(mesh.index_count as u32, batch.instance_count, mesh.index_loc as u32, mesh.vertex_loc as i32, 0)
-                            .unwrap();
-                    });
+                builder
+                    .bind_vertex_buffers(1, batch.instance_buffer.clone())
+                    .unwrap()
+                    .draw_indexed(mesh.index_count as u32, batch.instance_count, mesh.index_loc as u32, mesh.vertex_loc as i32, 0)
+                    .unwrap();
+            });
+        }
 
-                    builder
-                        .end_render_pass(SubpassEndInfo::default())
-                        .unwrap();
-                }
+        builder.end_render_pass(SubpassEndInfo::default())?;
 
-                builder.build().ok()
-            })
-            .collect();
+        let buffer = builder.build()?;
 
-        Ok(buffers)
+        Ok(buffer)
     }
 
     /// Handles recreation logic for the [`Swapchain`] by using the current information and any new
@@ -532,7 +535,11 @@ impl VulkanContext {
 
         // Recreate the framebuffers, which depend on the swapchain.
         let new_framebuffers =
-            Self::create_framebuffers(&self.swapchain_images, &self.render_pass)?;
+            Self::create_framebuffers(
+                self.mem_allocator.clone(),
+                &self.swapchain_images,
+                &self.render_pass
+            )?;
 
         self.framebuffers = new_framebuffers;
 
@@ -553,19 +560,7 @@ impl VulkanContext {
                 self.instance_registry.clone()
             );
 
-            let command_buffers = Self::get_command_buffers(
-                &self.cmd_allocator,
-                &self.queue,
-                &new_pipeline,
-                &self.framebuffers,
-                &self.camera,
-                &self.camera_resources,
-                self.mesh_registry.clone(),
-                batches
-            )?;
-
             self.pipeline = new_pipeline;
-            self.cmd_buffers = command_buffers;
         }
 
         Ok(())
@@ -604,6 +599,7 @@ impl MainApplication {
             library,
             InstanceCreateInfo {
                 flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
+                enabled_layers: vec!["VK_LAYER_KHRONOS_validation".to_string()],
                 enabled_extensions: required_extensions,
                 ..Default::default()
             },

@@ -1,6 +1,4 @@
-use std::sync::Arc;
-use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter};
+use vulkano::buffer::BufferContents;
 use crate::common::camera::Camera;
 
 #[derive(BufferContents)]
@@ -8,6 +6,7 @@ use crate::common::camera::Camera;
 pub struct CameraUniform {
     pub view: [[f32; 4]; 4],
     pub proj: [[f32; 4]; 4],
+    pub position: [f32; 3],
 }
 
 impl From<Camera> for CameraUniform {
@@ -24,6 +23,7 @@ impl From<&Camera> for CameraUniform {
         Self {
             view: view.into(),
             proj: proj.into(),
+            position: camera.position.into(),
         }
     }
 }
