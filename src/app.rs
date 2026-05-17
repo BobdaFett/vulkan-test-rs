@@ -235,7 +235,7 @@ impl VulkanContext {
                 Ok(r) => r,
                 Err(VulkanError::OutOfDate) => {
                     println!("Swapchain is out of date!");
-                    self.recreate_swapchain(true)?;
+                    self.recreate_window_size_dependent(true)?;
                     return Ok(());
                 }
                 Err(e) => panic!("Failed to acquire next image: {:?}", e),
@@ -245,7 +245,7 @@ impl VulkanContext {
         // This is fixed by recreating the swapchain, but we'll have to skip this frame.
         if suboptimal {
             println!("Swapchain is suboptimal!");
-            self.recreate_swapchain(false)?
+            self.recreate_window_size_dependent(false)?
         }
 
         // Rebuild command buffers
@@ -504,12 +504,11 @@ impl VulkanContext {
         Ok(buffer)
     }
 
-    /// Handles recreation logic for the [`Swapchain`] by using the current information and any new
-    /// bounds. Will also handle resizing logic, as this requires extra information to be updated,
-    /// specifically the [`GraphicsPipeline`] and [`PrimaryAutoCommandBuffer`]. All information is
-    /// automatically set within the `VulkanContext`.
-    // TODO Define a function that handles creation of all information related to the size of the window.
-    pub fn recreate_swapchain(&mut self, resized: bool) -> Result<(), Box<dyn Error>> {
+    /// Handles recreation logic for the [`Swapchain`] and [`Framebuffer`] by using the current
+    /// information and any new bounds. Will also handle resizing logic, as this requires extra
+    /// information to be updated, specifically the [`GraphicsPipeline`] and [`PrimaryAutoCommandBuffer`].
+    /// All information is automatically set within this `VulkanContext`.
+    pub fn recreate_window_size_dependent(&mut self, resized: bool) -> Result<(), Box<dyn Error>> {
         unsafe {
             self.device.wait_idle()?;
         };
@@ -583,7 +582,6 @@ impl App {
             library,
             InstanceCreateInfo {
                 flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
-                enabled_layers: vec!["VK_LAYER_KHRONOS_validation".to_string()],
                 enabled_extensions: required_extensions,
                 ..Default::default()
             },
@@ -621,7 +619,7 @@ impl ApplicationHandler for App {
                 );
                 if let Some(context) = self.context.as_mut() {
                     context
-                        .recreate_swapchain(true)
+                        .recreate_window_size_dependent(true)
                         .expect("Failed to recreate swapchain");
                 }
             }
