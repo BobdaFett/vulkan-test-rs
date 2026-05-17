@@ -3,6 +3,7 @@
 // Per-fragment - mesh dependent information.
 layout(location = 0) in vec3 inFragPosition;
 layout(location = 1) in vec3 inNormal;
+layout(location = 2) in vec3 inUv;
 
 // Per-frame information - CameraUniform struct
 layout(set = 0, binding = 0) uniform CameraUniform {

@@ -69,8 +69,9 @@ impl MeshRegistry {
             let all_norms = obj.normals();
             let obj_num_verts = all_verts.len();
             all_verts.iter().zip(all_norms.iter())
-                .for_each(|(pos, norm)| {
-                    buf_verts.push(Vertex3::new(*pos, *norm));
+                .zip(obj.uvs().iter())
+                .for_each(|((pos, norm), uv)| {
+                    buf_verts.push(Vertex3::new(*pos, *norm, *uv));
                 });
             // buf_verts.extend(all_verts.map(|v| Vertex3::new(v.position(), v.normal().unwrap_or_default())));
 
