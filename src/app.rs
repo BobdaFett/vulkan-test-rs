@@ -556,6 +556,7 @@ pub struct App {
 }
 
 impl App {
+    /// Constructs a new instance of the application.
     pub fn new(instance_extensions: InstanceExtensions) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             instance: Self::get_instance(instance_extensions)?,
@@ -563,6 +564,7 @@ impl App {
         })
     }
 
+    /// Draws a frame on the surface.
     pub fn draw_frame(&mut self) -> Result<(), Box<dyn Error>> {
         // Draw a frame on the surface. This requires a VulkanContext, which in turn will handle
         // the rendering logic. We'll pass on the required information to the context, if it exists,
@@ -573,7 +575,7 @@ impl App {
             .draw_frame()
     }
 
-    /// Gets the Vulkan instance.
+    /// Creates a new Vulkan instance.
     fn get_instance(required_extensions: InstanceExtensions) -> Result<Arc<Instance>, String> {
         let library =
             VulkanLibrary::new().map_err(|e| format!("Failed to find Vulkan library: {e}"))?;
