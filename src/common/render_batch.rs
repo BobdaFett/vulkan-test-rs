@@ -24,16 +24,17 @@ impl RenderBatch {
             .filter_map(|(id, mesh)| {
                 let instances = instance_registry.get_instances_for(id);
 
+                if instances.is_empty() {
+                    // A buffer with zero size breaks the rendering pipeline, plus there's no point
+                    return None;
+                }
+
                 let gpu_instances = instances.iter()
                     .cloned()
                     .map(|instance| {
                         instance.into()
                     })
                     .collect::<Vec<GpuInstance>>();
-
-                if gpu_instances.is_empty() {
-                    return None;
-                }
 
                 // Build instances into a RenderBatch
                 let instance_buffer = Buffer::from_iter(
