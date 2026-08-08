@@ -5,7 +5,7 @@ use nalgebra::{Matrix4, Vector3, Vector4};
 /// Contains all information about an instance of a mesh, specifically its translation, rotation,
 /// and scale. Note that the rotation is a [`Vector4`], and not a `Quaternion`.
 ///
-/// This may be taken from a scene instance by calling the `Instance::from` method on the
+/// This may be taken from a scene instance by calling the [`MeshInstance::from`] method on the
 /// corresponding [`SceneInstance`]. This is important, as the `Vector4` is not serializable.
 ///
 /// Before passing this instance into the shaders, construct a transformation matrix by calling

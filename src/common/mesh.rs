@@ -5,6 +5,7 @@ use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter};
 use wavefront::Obj;
+use crate::loaders::mesh_loader::{MeshInfo, MeshLoader};
 
 /// This struct is slightly misleading - it doesn't actually contain the mesh information, but
 /// the locations of the mesh's information in the overall application's vertex buffer, index buffer,
@@ -47,16 +48,18 @@ impl MeshRegistry {
     pub fn from_scene(scene: &Scene, allocator: Arc<dyn MemoryAllocator>) -> Self {
         // Load all the meshes into a single map.
         println!("Loading meshes from scene");
+
+        let mesh_loader = MeshLoader::new();
         let meshes = scene
             .mesh_paths
             .iter()
             .map(|(id, path)| {
                 (
                     id.clone(),
-                    Obj::from_file(path).expect("Couldn't read wavefront file"),
+                    mesh_loader.load_mesh(path).expect("Couldn't read wavefront file"),
                 )
             })
-            .collect::<HashMap<String, Obj>>();
+            .collect::<HashMap<String, MeshInfo>>();
 
         let mut buf_verts = Vec::new();
         let mut buf_indices = Vec::new();
@@ -65,27 +68,18 @@ impl MeshRegistry {
             // Information will be added directly to the verts and indices vectors, and a new Mesh
             // struct will be created and inserted into the mesh_list.
             let vert_start = buf_verts.len();
-            let all_verts = obj.positions();
-            let all_norms = obj.normals();
+            let all_verts = obj.vertices;
+            let all_norms = obj.normals;
             let obj_num_verts = all_verts.len();
             all_verts.iter().zip(all_norms.iter())
-                .zip(obj.uvs().iter())
+                .zip(obj.uvs.iter())
                 .for_each(|((pos, norm), uv)| {
                     buf_verts.push(Vertex3::new(*pos, *norm, *uv));
                 });
-            // buf_verts.extend(all_verts.map(|v| Vertex3::new(v.position(), v.normal().unwrap_or_default())));
 
-            let index_list = obj
-                .triangles()
-                .flat_map(|t| {
-                    t.iter()
-                        .map(|i| i.position_index() as u32)
-                        .collect::<Vec<u32>>()
-                })
-                .collect::<Vec<u32>>();
             let index_start = buf_indices.len();
-            let obj_num_idx = index_list.len();
-            buf_indices.extend(index_list);
+            let obj_num_idx = obj.indices.len();
+            buf_indices.extend(obj.indices);
 
             println!("Loaded mesh {} with {} vertices and {} indices", id, obj_num_verts, obj_num_idx);
 
