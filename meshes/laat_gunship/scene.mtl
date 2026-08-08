@@ -1,0 +1,54 @@
+# MTL file - created by a modified js OBJExporter
+
+newmtl LAAT_INT_EXT
+Tr 0.0000
+Tf 1.0000 1.0000 1.0000
+illum 1
+Pm 1
+Pr 1
+Pds 1
+Pl 1
+Ka 1 1 1
+Kd 1 1 1
+Ke 1 1 1
+map_Kd LAAT_INT_EXT.png
+map_Ke emissiveMap1.png
+map_Pm metalnessMap1.png
+map_Pr metalnessMap1.png
+norm normalMap1.png
+
+newmtl LAAT_INT_EXT_Glass
+Tr 0.75
+Tf 1.0000 1.0000 1.0000
+illum 1
+Pr 0.5775255696017358
+Pds 1
+Pl 1
+Pccns 11
+Prfl 0.5
+Pior 1.5
+Pshc 0 0 0
+Pshr 1
+Psi 1
+Psc 1 1 1
+Ptr 0.88
+Ka 1 1 1
+Kd 0.028952469188477523 0.028952469188477523 0.028952469188477523
+Ke 0 0 0
+norm normalMap1.png
+
+newmtl LAAT_HULL
+Tr 0.0000
+Tf 1.0000 1.0000 1.0000
+illum 1
+Pm 1
+Pr 1
+Pds 1
+Pl 1
+Ka 1 1 1
+Kd 1 1 1
+Ke 0 0 0
+map_Kd LAAT_HULL.png
+map_Pm metalnessMap3.png
+map_Pr metalnessMap3.png
+norm normalMap3.png
