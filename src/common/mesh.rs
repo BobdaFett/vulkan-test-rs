@@ -81,7 +81,7 @@ impl MeshRegistry {
             let obj_num_idx = obj.indices.len();
             buf_indices.extend(obj.indices);
 
-            println!("Loaded mesh {} with {} vertices and {} indices", id, obj_num_verts, obj_num_idx);
+            println!("Loaded mesh \"{}\" with {} vertices and {} indices", id, obj_num_verts, obj_num_idx);
 
             // TODO Create bounding boxes for each mesh and associate them with the struct.
             mesh_list.insert(

@@ -21,7 +21,7 @@ impl RenderBatch {
         instance_registry: Arc<InstanceRegistry>
     ) -> Vec<Self> {
         mesh_registry.meshes.iter()
-            .map(|(id, mesh)| {
+            .filter_map(|(id, mesh)| {
                 let instances = instance_registry.get_instances_for(id);
 
                 let gpu_instances = instances.iter()
@@ -30,6 +30,10 @@ impl RenderBatch {
                         instance.into()
                     })
                     .collect::<Vec<GpuInstance>>();
+
+                if gpu_instances.is_empty() {
+                    return None;
+                }
 
                 // Build instances into a RenderBatch
                 let instance_buffer = Buffer::from_iter(
@@ -46,11 +50,11 @@ impl RenderBatch {
                     gpu_instances
                 ).expect("Couldn't allocate instance buffer");
 
-                Self {
+                Some(Self {
                     mesh_id: id.clone(),
                     instance_buffer,
                     instance_count: instances.len() as u32,
-                }
+                })
             }).collect()
     }
 }

@@ -1,25 +1,26 @@
 {
   "name": "Testing Scene",
   "mesh_paths": {
-    "gunship": "laat_gunship/scene.obj"
+    "gunship": "meshes/laat_gunship/scene.obj",
+    "trooper": "meshes/clone_trooper/scene.gltf"
   },
   "instances": {
-    "gunship": {
-      "translation": [
-        0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
+    "trooper": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scale": [
+          20.0,
+          20.0,
+          20.0
+        ]
     }
   }
 }

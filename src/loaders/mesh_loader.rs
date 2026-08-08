@@ -6,9 +6,13 @@ use crate::loaders::obj_loader::ObjLoader;
 use super::gltf_loader::*;
 
 pub struct MeshInfo {
+    /// The mesh's vertices.
     pub vertices: Vec<[f32; 3]>,
+    /// The mesh's vertex normals.
     pub normals: Vec<[f32; 3]>,
+    /// The mesh's vertex indices.
     pub indices: Vec<u32>,
+    /// The texture coordinates. Note that these may also be used on 3D textures.
     pub uvs: Vec<[f32; 3]>,
 }
 
