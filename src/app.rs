@@ -1,4 +1,9 @@
+use crate::common::camera::{Camera, CameraResources};
+use crate::common::instance::InstanceRegistry;
 use crate::common::mesh::MeshRegistry;
+use crate::common::render_batch::RenderBatch;
+use crate::common::scene::Scene;
+use crate::gpu::instance::GpuInstance;
 use crate::gpu::vertex3::Vertex3;
 use crate::triangle;
 use std::error::Error;
@@ -15,35 +20,33 @@ use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::device::{
     Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
 };
+use vulkano::format::Format;
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, StandardMemoryAllocator};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
+use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
-use vulkano::pipeline::{DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
+use vulkano::pipeline::{
+    DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout,
+    PipelineShaderStageCreateInfo,
+};
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass};
 use vulkano::shader::ShaderModule;
 use vulkano::swapchain::{Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::sync::GpuFuture;
 use vulkano::{Validated, VulkanError, VulkanLibrary, swapchain, sync};
-use vulkano::format::Format;
-use vulkano::pipeline::graphics::depth_stencil::{DepthState, DepthStencilState};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowAttributes, WindowId};
-use crate::common::camera::{Camera, CameraResources};
-use crate::common::instance::InstanceRegistry;
-use crate::common::render_batch::RenderBatch;
-use crate::common::scene::Scene;
-use crate::gpu::instance::GpuInstance;
 
 struct VulkanContext {
     window: Arc<Window>,
@@ -165,23 +168,14 @@ impl VulkanContext {
         let frag_shader = triangle::load_fragment(device.clone())
             .map_err(|e| format!("Failed to load fragment shader: {e}"))?;
 
-        let framebuffers = Self::create_framebuffers(
-            mem_allocator.clone(),
-            &images,
-            &render_pass
-        )?;
+        let framebuffers = Self::create_framebuffers(mem_allocator.clone(), &images, &render_pass)?;
 
         let image_extents = swapchain.image_extent();
 
         // Create the camera.
         let camera = Camera::new(image_extents);
 
-        let pipeline = Self::create_pipeline(
-            &device,
-            &vert_shader,
-            &frag_shader,
-            &render_pass,
-        )?;
+        let pipeline = Self::create_pipeline(&device, &vert_shader, &frag_shader, &render_pass)?;
 
         // Get descriptor set layout
         let pipeline_layout = pipeline.layout().clone();
@@ -191,17 +185,12 @@ impl VulkanContext {
         let camera_resources = CameraResources::new(
             mem_allocator.clone(),
             desc_allocator.clone(),
-            desc_set_layout
+            desc_set_layout,
         );
 
         let scene = Scene::from_file_json("./test_scene.scene");
-        let mesh_registry = Arc::new(MeshRegistry::from_scene(
-            &scene,
-            mem_allocator.clone()
-        ));
-        let instance_registry = Arc::new(InstanceRegistry::from_scene(
-            &scene
-        ));
+        let mesh_registry = Arc::new(MeshRegistry::from_scene(&scene, mem_allocator.clone()));
+        let instance_registry = Arc::new(InstanceRegistry::from_scene(&scene));
 
         Ok(Self {
             window,
@@ -220,7 +209,7 @@ impl VulkanContext {
             mesh_registry,
             instance_registry,
             camera,
-            camera_resources
+            camera_resources,
         })
     }
 
@@ -260,16 +249,13 @@ impl VulkanContext {
             RenderBatch::build_batches(
                 self.mem_allocator.clone(),
                 self.mesh_registry.clone(),
-                self.instance_registry.clone()
-            )
+                self.instance_registry.clone(),
+            ),
         )?;
 
         let future = sync::now(self.device.clone())
             .join(acquire_future)
-            .then_execute(
-                self.queue.clone(),
-                cmd_buffer.clone(),
-            )?
+            .then_execute(self.queue.clone(), cmd_buffer.clone())?
             .then_swapchain_present(
                 self.queue.clone(),
                 SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_idx),
@@ -339,19 +325,17 @@ impl VulkanContext {
         images: &Vec<Arc<Image>>,
         render_pass: &Arc<RenderPass>,
     ) -> Result<Vec<Arc<Framebuffer>>, Box<dyn Error>> {
-        let depth_buffer = ImageView::new_default(
-            Image::new(
-                alloc.clone(),
-                ImageCreateInfo {
-                    image_type: ImageType::Dim2d,
-                    format: Format::D16_UNORM,
-                    extent: images[0].extent(),
-                    usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
-                    ..Default::default()
-                },
-                AllocationCreateInfo::default()
-            )?
-        )?;
+        let depth_buffer = ImageView::new_default(Image::new(
+            alloc.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::D16_UNORM,
+                extent: images[0].extent(),
+                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
+                ..Default::default()
+            },
+            AllocationCreateInfo::default(),
+        )?)?;
 
         let framebuffers = images
             .iter()
@@ -388,8 +372,8 @@ impl VulkanContext {
             .entry_point("main")
             .ok_or("Failed to find fragment shader entry point")?;
 
-        let vertex_input_state = [Vertex3::per_vertex(), GpuInstance::per_instance()]
-            .definition(&vs)?;
+        let vertex_input_state =
+            [Vertex3::per_vertex(), GpuInstance::per_instance()].definition(&vs)?;
 
         let stages = vec![
             PipelineShaderStageCreateInfo::new(vs),
@@ -453,15 +437,12 @@ impl VulkanContext {
             queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         )
-            .expect("Couldn't create command buffer builder");
+        .expect("Couldn't create command buffer builder");
 
         builder
             .begin_render_pass(
                 RenderPassBeginInfo {
-                    clear_values: vec![
-                        Some([0.1, 0.1, 0.1, 0.5].into()),
-                        Some(1f32.into()),
-                    ],
+                    clear_values: vec![Some([0.1, 0.1, 0.1, 0.5].into()), Some(1f32.into())],
                     ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
                 },
                 SubpassBeginInfo {
@@ -469,10 +450,7 @@ impl VulkanContext {
                     ..Default::default()
                 },
             )?
-            .set_viewport(
-                0,
-                [camera.viewport()].into_iter().collect()
-            )?
+            .set_viewport(0, [camera.viewport()].into_iter().collect())?
             .bind_descriptor_sets(
                 PipelineBindPoint::Graphics,
                 pipeline.layout().clone(),
@@ -486,13 +464,20 @@ impl VulkanContext {
         unsafe {
             render_batches.iter().for_each(|batch| {
                 // Grab mesh information
-                let mesh = mesh_registry.get(&batch.mesh_id)
+                let mesh = mesh_registry
+                    .get(&batch.mesh_id)
                     .expect("Mesh does not exist in registry");
 
                 builder
                     .bind_vertex_buffers(1, batch.instance_buffer.clone())
                     .unwrap()
-                    .draw_indexed(mesh.index_count as u32, batch.instance_count, mesh.index_loc as u32, mesh.vertex_loc as i32, 0)
+                    .draw_indexed(
+                        mesh.index_count as u32,
+                        batch.instance_count,
+                        mesh.index_loc as u32,
+                        mesh.vertex_loc as i32,
+                        0,
+                    )
                     .unwrap();
             });
         }
@@ -524,12 +509,11 @@ impl VulkanContext {
         self.swapchain_images = new_images;
 
         // Recreate the framebuffers, which depend on the swapchain.
-        let new_framebuffers =
-            Self::create_framebuffers(
-                self.mem_allocator.clone(),
-                &self.swapchain_images,
-                &self.render_pass
-            )?;
+        let new_framebuffers = Self::create_framebuffers(
+            self.mem_allocator.clone(),
+            &self.swapchain_images,
+            &self.render_pass,
+        )?;
 
         self.framebuffers = new_framebuffers;
 
@@ -541,7 +525,8 @@ impl VulkanContext {
                 &self.render_pass,
             )?;
 
-            self.camera.extents([image_extents.width, image_extents.height]);
+            self.camera
+                .extents([image_extents.width, image_extents.height]);
 
             self.pipeline = new_pipeline;
         }

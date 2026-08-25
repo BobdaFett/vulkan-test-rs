@@ -13,15 +13,11 @@ pub struct Vertex3 {
 }
 
 impl Vertex3 {
-    pub fn new(
-        position: [f32; 3],
-        normal: [f32; 3],
-        uv: [f32; 3],
-    ) -> Self {
+    pub fn new(position: [f32; 3], normal: [f32; 3], uv: [f32; 3]) -> Self {
         Self {
             position,
             normal,
-            uv
+            uv,
         }
     }
 }

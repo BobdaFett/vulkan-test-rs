@@ -1,26 +1,28 @@
 {
-  "name": "Testing Scene",
-  "mesh_paths": {
-    "gunship": "meshes/laat_gunship/scene.obj",
-    "trooper": "meshes/clone_trooper/scene.gltf"
-  },
-  "instances": {
-    "trooper": {
-        "translation": [
-          0.0,
-          0.0,
-          0.0
-        ],
-        "rotation": [
-          0.0,
-          0.0,
-          0.0
-        ],
-        "scale": [
-          1.0,
-          1.0,
-          1.0
-        ]
+    "name": "Testing Scene",
+    "mesh_paths": {
+        "gunship": "meshes/laat_gunship/scene.obj",
+        "trooper": "meshes/clone_trooper/scene.gltf",
+        "destroyer": "../meshes/sw_isd.glb",
+        "interceptor": "../meshes/sw_tie_interceptor.glb"
+    },
+    "instances": {
+        "interceptor": {
+            "translation": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "rotation": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "scale": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        }
     }
-  }
 }

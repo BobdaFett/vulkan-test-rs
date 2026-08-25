@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
 pub struct MaterialRegistry {
-    materials: HashMap<String, Material>
+    materials: HashMap<String, Material>,
 }
 
 impl MaterialRegistry {
     pub fn new() -> Self {
         Self {
-            materials: HashMap::new()
+            materials: HashMap::new(),
         }
     }
 

@@ -1,6 +1,6 @@
-use std::path::Path;
-use anyhow::Result;
 use crate::loaders::mesh_loader::{MeshFileLoader, MeshInfo};
+use anyhow::Result;
+use std::path::Path;
 
 pub struct GltfLoader;
 
@@ -51,7 +51,7 @@ impl MeshFileLoader for GltfLoader {
             vertices,
             indices,
             normals,
-            uvs
+            uvs,
         })
     }
 }

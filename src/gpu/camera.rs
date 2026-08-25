@@ -1,5 +1,5 @@
-use vulkano::buffer::BufferContents;
 use crate::common::camera::Camera;
+use vulkano::buffer::BufferContents;
 
 #[derive(BufferContents)]
 #[repr(C)]

@@ -1,14 +1,13 @@
-use std::path::Path;
-use wavefront::Obj;
 use crate::gpu::vertex3::Vertex3;
 use crate::loaders::mesh_loader::{MeshFileLoader, MeshInfo};
+use std::path::Path;
+use wavefront::Obj;
 
 pub struct ObjLoader;
 
 impl MeshFileLoader for ObjLoader {
     fn load_mesh(&self, path: &Path) -> anyhow::Result<MeshInfo> {
-        let obj_info = Obj::from_file(path)
-            .expect("Couldn't read wavefront file");
+        let obj_info = Obj::from_file(path).expect("Couldn't read wavefront file");
 
         let index_list = obj_info
             .triangles()
@@ -23,7 +22,7 @@ impl MeshFileLoader for ObjLoader {
             vertices: obj_info.positions().to_vec(),
             normals: obj_info.normals().to_vec(),
             indices: index_list,
-            uvs: obj_info.uvs().to_vec()
+            uvs: obj_info.uvs().to_vec(),
         })
     }
 }

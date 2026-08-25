@@ -1,9 +1,9 @@
+use super::gltf_loader::*;
+use crate::loaders::obj_loader::ObjLoader;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
-use anyhow::Result;
 use thiserror::Error;
-use crate::loaders::obj_loader::ObjLoader;
-use super::gltf_loader::*;
 
 pub struct MeshInfo {
     /// The mesh's vertices.
@@ -21,7 +21,7 @@ pub trait MeshFileLoader {
 }
 
 pub struct MeshLoader {
-    loaders: HashMap<String, Box<dyn MeshFileLoader>>
+    loaders: HashMap<String, Box<dyn MeshFileLoader>>,
 }
 
 #[derive(Error, Debug)]
@@ -29,29 +29,37 @@ pub enum MeshLoaderError {
     #[error("file extension is missing")]
     MissingExtension,
     #[error("extension {0} is not supported")]
-    ExtensionNotSupported(String)
+    ExtensionNotSupported(String),
 }
 
 impl MeshLoader {
     pub fn new() -> Self {
         let mut loaders = HashMap::new();
-        loaders.insert("gltf".into(), Box::new(GltfLoader) as Box<dyn MeshFileLoader>);
+        loaders.insert(
+            "gltf".into(),
+            Box::new(GltfLoader) as Box<dyn MeshFileLoader>,
+        );
+        loaders.insert(
+            "glb".into(),
+            Box::new(GltfLoader) as Box<dyn MeshFileLoader>,
+        );
         loaders.insert("obj".into(), Box::new(ObjLoader));
 
-        Self {
-            loaders
-        }
+        Self { loaders }
     }
 
     /// Loads a mesh and returns a `Result` containing the information.
     pub fn load_mesh<P: AsRef<Path>>(&self, path: &P) -> Result<MeshInfo> {
-        let ext = path.as_ref().extension()
+        let ext = path
+            .as_ref()
+            .extension()
             .and_then(|ext| ext.to_str())
             .ok_or(MeshLoaderError::MissingExtension)?;
 
         println!("Found extension {}, continuing with loading", ext);
 
-        self.loaders.get(ext)
+        self.loaders
+            .get(ext)
             .ok_or(MeshLoaderError::ExtensionNotSupported(ext.to_string()))?
             .load_mesh(path.as_ref())
     }

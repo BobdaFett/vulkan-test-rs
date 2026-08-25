@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter};
 use crate::common::instance::InstanceRegistry;
 use crate::common::mesh::MeshRegistry;
 use crate::gpu::instance::GpuInstance;
+use std::sync::Arc;
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter};
 
 #[derive(Debug, Clone)]
 pub struct RenderBatch {
@@ -18,9 +18,11 @@ impl RenderBatch {
     pub fn build_batches(
         allocator: Arc<dyn MemoryAllocator>,
         mesh_registry: Arc<MeshRegistry>,
-        instance_registry: Arc<InstanceRegistry>
+        instance_registry: Arc<InstanceRegistry>,
     ) -> Vec<Self> {
-        mesh_registry.meshes.iter()
+        mesh_registry
+            .meshes
+            .iter()
             .filter_map(|(id, mesh)| {
                 let instances = instance_registry.get_instances_for(id);
 
@@ -29,11 +31,10 @@ impl RenderBatch {
                     return None;
                 }
 
-                let gpu_instances = instances.iter()
+                let gpu_instances = instances
+                    .iter()
                     .cloned()
-                    .map(|instance| {
-                        instance.into()
-                    })
+                    .map(|instance| instance.into())
                     .collect::<Vec<GpuInstance>>();
 
                 // Build instances into a RenderBatch
@@ -44,18 +45,20 @@ impl RenderBatch {
                         ..Default::default()
                     },
                     AllocationCreateInfo {
-                        memory_type_filter: MemoryTypeFilter::PREFER_DEVICE |
-                            MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                        memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                            | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                         ..Default::default()
                     },
-                    gpu_instances
-                ).expect("Couldn't allocate instance buffer");
+                    gpu_instances,
+                )
+                .expect("Couldn't allocate instance buffer");
 
                 Some(Self {
                     mesh_id: id.clone(),
                     instance_buffer,
                     instance_count: instances.len() as u32,
                 })
-            }).collect()
+            })
+            .collect()
     }
 }

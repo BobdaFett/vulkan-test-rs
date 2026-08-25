@@ -89,24 +89,23 @@ pub struct SceneInstance {
 
 #[cfg(test)]
 pub mod create_files {
+    pub use super::*;
     use std::error::Error;
     use std::io::Write;
-    pub use super::*;
 
     #[test]
     pub fn create_test_scene() -> Result<(), Box<dyn Error>> {
         let scene = Scene {
             name: "Testing Scene".to_string(),
-            mesh_paths: HashMap::from([
-                ("venator".to_string(), "Venator.obj".to_string())
-            ]),
-            instances: HashMap::from([
-                ("venator".to_string(), SceneInstance {
+            mesh_paths: HashMap::from([("venator".to_string(), "Venator.obj".to_string())]),
+            instances: HashMap::from([(
+                "venator".to_string(),
+                SceneInstance {
                     translation: [0.0, 0.0, 0.0],
                     rotation: [0.0, 0.0, 0.0],
-                    scale: [1.0, 1.0, 1.0]
-                })
-            ])
+                    scale: [1.0, 1.0, 1.0],
+                },
+            )]),
         };
 
         let json = serde_json::to_string_pretty(&scene)?;

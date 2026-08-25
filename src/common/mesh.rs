@@ -1,11 +1,11 @@
 use crate::common::scene::Scene;
 use crate::gpu::vertex3::Vertex3;
+use crate::loaders::mesh_loader::{MeshInfo, MeshLoader};
 use std::collections::HashMap;
 use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter};
 use wavefront::Obj;
-use crate::loaders::mesh_loader::{MeshInfo, MeshLoader};
 
 /// This struct is slightly misleading - it doesn't actually contain the mesh information, but
 /// the locations of the mesh's information in the overall application's vertex buffer, index buffer,
@@ -56,7 +56,9 @@ impl MeshRegistry {
             .map(|(id, path)| {
                 (
                     id.clone(),
-                    mesh_loader.load_mesh(path).expect("Couldn't read wavefront file"),
+                    mesh_loader
+                        .load_mesh(path)
+                        .expect("Couldn't read wavefront file"),
                 )
             })
             .collect::<HashMap<String, MeshInfo>>();
@@ -71,7 +73,9 @@ impl MeshRegistry {
             let all_verts = obj.vertices;
             let all_norms = obj.normals;
             let obj_num_verts = all_verts.len();
-            all_verts.iter().zip(all_norms.iter())
+            all_verts
+                .iter()
+                .zip(all_norms.iter())
                 .zip(obj.uvs.iter())
                 .for_each(|((pos, norm), uv)| {
                     buf_verts.push(Vertex3::new(*pos, *norm, *uv));
@@ -81,7 +85,10 @@ impl MeshRegistry {
             let obj_num_idx = obj.indices.len();
             buf_indices.extend(obj.indices);
 
-            println!("Loaded mesh \"{}\" with {} vertices and {} indices", id, obj_num_verts, obj_num_idx);
+            println!(
+                "Loaded mesh \"{}\" with {} vertices and {} indices",
+                id, obj_num_verts, obj_num_idx
+            );
 
             // TODO Create bounding boxes for each mesh and associate them with the struct.
             mesh_list.insert(

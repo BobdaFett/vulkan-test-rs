@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use crate::common::scene::{Scene, SceneInstance};
 use nalgebra::{Matrix4, Vector3, Vector4};
+use std::collections::HashMap;
 
 /// Contains all information about an instance of a mesh, specifically its translation, rotation,
 /// and scale. Note that the rotation is a [`Vector4`], and not a `Quaternion`.
@@ -44,7 +44,13 @@ impl From<SceneInstance> for MeshInstance {
 }
 
 impl From<&SceneInstance> for MeshInstance {
-    fn from(SceneInstance { translation, rotation, scale }: &SceneInstance) -> Self {
+    fn from(
+        SceneInstance {
+            translation,
+            rotation,
+            scale,
+        }: &SceneInstance,
+    ) -> Self {
         Self {
             translation: Vector3::from(*translation).to_homogeneous(),
             rotation: Vector3::from(*rotation).to_homogeneous(),
@@ -61,17 +67,18 @@ pub struct InstanceRegistry {
 impl InstanceRegistry {
     pub fn from_scene(scene: &Scene) -> Self {
         // Read information about the instances from the scene.
-        let instances: HashMap<String, Vec<MeshInstance>> = scene.instances.iter()
-            .fold(HashMap::new(), |mut map, (mesh_id, instance)| {
-                map.entry(mesh_id.clone())
-                    .and_modify(|v| v.push(instance.into()))
-                    .or_insert(vec![instance.into()]);
-                map
-            });
+        let instances: HashMap<String, Vec<MeshInstance>> =
+            scene
+                .instances
+                .iter()
+                .fold(HashMap::new(), |mut map, (mesh_id, instance)| {
+                    map.entry(mesh_id.clone())
+                        .and_modify(|v| v.push(instance.into()))
+                        .or_insert(vec![instance.into()]);
+                    map
+                });
 
-        Self {
-            instances
-        }
+        Self { instances }
     }
 
     pub fn get_instances_for(&self, mesh_id: &String) -> Vec<MeshInstance> {
