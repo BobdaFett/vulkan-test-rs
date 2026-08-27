@@ -573,7 +573,10 @@ impl App {
                 ..Default::default()
             },
         )
-        .map_err(|e| format!("Failed to create instance: {e}"))
+        .map_err(|e| {
+            let err = e.unwrap();
+            format!("Failed to create instance: {err}")
+        })
     }
 }
 

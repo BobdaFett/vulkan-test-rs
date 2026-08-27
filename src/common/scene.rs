@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
 use std::io::Read;
 use std::path::Path;
 
@@ -45,16 +46,22 @@ impl Scene {
         let scene: Self =
             postcard::from_bytes(contents.as_slice()).expect("Couldn't deserialize scene");
 
-        Self::resolve_paths(path, scene)
+        env::set_current_dir(path.parent().unwrap())
+            .expect("couldn't set current working directory");
+
+        scene
     }
 
     pub fn from_file_json<P: AsRef<Path>>(path: P) -> Self {
         let path = path.as_ref();
 
         let file = std::fs::File::open(path).unwrap();
+        env::set_current_dir(path.parent().unwrap())
+            .expect("couldn't set current working directory");
+
         let scene: Self = serde_json::from_reader(file).unwrap();
 
-        Self::resolve_paths(path, scene)
+        scene
     }
 
     fn resolve_paths(scene_path: &Path, mut scene: Self) -> Self {
