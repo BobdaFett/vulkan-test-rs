@@ -1,7 +1,7 @@
 use crate::loaders::mesh_loader::{MeshFileLoader, MeshInfo};
 use anyhow::Result;
 use std::path::Path;
-use nalgebra::Matrix4;
+use nalgebra::{Matrix4, OMatrix, RowVector4};
 
 pub struct GltfLoader;
 
@@ -36,8 +36,13 @@ impl MeshFileLoader for GltfLoader {
         println!("Parsing {} scenes from {:?}", scenes.len(), path);
         for scene in scenes {
             for node in scene.nodes() {
-                let transform = node.transform().matrix();
-                println!("Scene has transform: {:?}", transform);
+                let transform = node.transform().matrix()
+                    .iter()
+                    .flatten()
+                    .cloned()
+                    .collect::<Vec<f32>>();
+                let matrix = Matrix4::from_row_slice(transform.as_slice());
+                println!("Scene has transform: {}", matrix);
             }
         }
 
