@@ -64,3 +64,38 @@ impl MeshLoader {
             .load_mesh(path.as_ref())
     }
 }
+
+#[cfg(test)]
+pub mod test_load_meshes {
+    use super::*;
+
+    fn load_gltf(loader: &MeshLoader) -> Result<MeshInfo> {
+        loader.load_mesh(&Path::new("meshes/laat_gltf/scene.gltf"))
+    }
+
+    fn load_obj(loader: &MeshLoader) -> Result<MeshInfo> {
+        loader.load_mesh(&Path::new("meshes/laat_gunship/scene.obj"))
+    }
+
+    #[test]
+    fn compare_obj_gltf() -> Result<()> {
+        // Create the mesh loader
+        let loader = MeshLoader::new();
+
+        let obj = load_obj(&loader)?;
+        let gltf = load_gltf(&loader)?;
+
+        // Compare mesh information between the two MeshInfo structs.
+        obj.vertices.iter()
+            .zip(gltf.vertices.iter())
+            .for_each(|(&a, &b)| assert_eq!(a, b));
+        obj.indices.iter()
+            .zip(gltf.indices.iter())
+            .for_each(|(&a, &b)| assert_eq!(a, b));
+        obj.normals.iter()
+            .zip(gltf.normals.iter())
+            .for_each(|(&a, &b)| assert_eq!(a, b));
+
+        Ok(())
+    }
+}

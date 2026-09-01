@@ -572,8 +572,7 @@ impl App {
                 enabled_extensions: required_extensions,
                 ..Default::default()
             },
-        )
-        .map_err(|e| {
+        ).map_err(|e| {
             let err = e.unwrap();
             format!("Failed to create instance: {err}")
         })
