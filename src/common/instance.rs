@@ -18,6 +18,8 @@ pub struct MeshInstance {
     /// The rotation of the instance. Note that since this is a [`Vector4`], or Euler angle, it
     /// suffers from gimbal lock. If this becomes a serious issue, an [`nalgebra::UnitQuaternion`]
     /// should be used instead.
+    ///
+    /// This value is in radians.
     pub rotation: Vector4<f32>,
     /// The scale of the instance, represented as the scaling in XYZ coordinates.
     pub scale: Vector3<f32>,
