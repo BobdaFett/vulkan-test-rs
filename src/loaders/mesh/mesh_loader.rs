@@ -1,5 +1,5 @@
 use super::gltf_loader::*;
-use crate::loaders::obj_loader::ObjLoader;
+use crate::loaders::mesh::obj_loader::ObjLoader;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
@@ -20,16 +20,20 @@ pub trait MeshFileLoader {
     fn load_mesh(&self, path: &Path) -> Result<MeshInfo>;
 }
 
-pub struct MeshLoader {
-    loaders: HashMap<String, Box<dyn MeshFileLoader>>,
-}
-
 #[derive(Error, Debug)]
 pub enum MeshLoaderError {
     #[error("file extension is missing")]
     MissingExtension,
     #[error("extension {0} is not supported")]
     ExtensionNotSupported(String),
+}
+
+/// A mesh loader struct that handles multiple different file types. The list of supported and
+/// planned file formats follows:
+///  - `.gltf`
+///  - `.obj`
+pub struct MeshLoader {
+    loaders: HashMap<String, Box<dyn MeshFileLoader>>,
 }
 
 impl MeshLoader {
@@ -48,7 +52,9 @@ impl MeshLoader {
         Self { loaders }
     }
 
-    /// Loads a mesh and returns a `Result` containing the information.
+    /// Loads a mesh from the given path. Note that materials are not automatically loaded through
+    /// this function, and must be manually loaded. Refer to the [`MeshLoader`] for more information
+    /// on what file types are supported.
     pub fn load_mesh<P: AsRef<Path>>(&self, path: &P) -> Result<MeshInfo> {
         let ext = path
             .as_ref()
@@ -70,11 +76,11 @@ pub mod test_load_meshes {
     use super::*;
 
     fn load_gltf(loader: &MeshLoader) -> Result<MeshInfo> {
-        loader.load_mesh(&Path::new("meshes/laat_gltf/scene.gltf"))
+        loader.load_mesh(&Path::new("../../../meshes/laat_gltf/scene.gltf"))
     }
 
     fn load_obj(loader: &MeshLoader) -> Result<MeshInfo> {
-        loader.load_mesh(&Path::new("meshes/laat_gunship/scene.obj"))
+        loader.load_mesh(&Path::new("../../../meshes/laat_gunship/scene.obj"))
     }
 
     #[test]
