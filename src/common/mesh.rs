@@ -1,24 +1,19 @@
+use crate::assets::loaders::mesh_loader::{MeshInfo, MeshLoader};
 use crate::common::scene::Scene;
 use crate::gpu::vertex3::Vertex3;
-use crate::loaders::mesh_loader::{MeshInfo, MeshLoader};
 use std::collections::HashMap;
 use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter};
-use wavefront::Obj;
 
 /// This struct is slightly misleading - it doesn't actually contain the mesh information, but
 /// the locations of the mesh's information in the overall application's vertex buffer, index buffer,
 /// and other such structures.
 ///
-/// Once loaded, the mesh should be accessible via ID through a registry-type struct, which simply
-/// maintains the list of meshes that have been loaded by the application so far and which assigns
-/// the correct indices for buffer-to-render logic.
-///
-/// That means that this `Mesh` struct is actually just an entry within that registry. They should
-/// rarely be used directly, and should never be edited.
+/// That means that this `MeshHandle` struct is actually just an entry within that registry. They
+/// should never be edited or created manually.
 #[derive(Debug)]
-pub struct Mesh {
+pub struct MeshHandle {
     pub id: String,
     pub vertex_loc: usize,
     pub vertex_count: usize,
@@ -26,26 +21,48 @@ pub struct Mesh {
     pub index_count: usize,
 }
 
-impl Mesh {}
+impl MeshHandle {}
+
+type VertexBuffer = Arc<Subbuffer<[Vertex3]>>;
+type IndexBuffer = Arc<Subbuffer<[u32]>>;
 
 /// # Mesh Registry
-/// A wrapper around a series of [`Mesh`] structs, keyed by a unique ID, and the buffers that are
+/// A wrapper around a series of [`MeshHandle`] structs, keyed by a unique ID, and the buffers that are
 /// used by the rendering pipeline.
 #[derive(Debug)]
 pub struct MeshRegistry {
-    pub meshes: HashMap<String, Mesh>,
+    /// The map of mesh IDs and their display handles.
+    pub meshes: HashMap<String, MeshHandle>,
+    /// The memory allocator this registry should use.
     allocator: Arc<dyn MemoryAllocator>,
-    pub vertex_buffer: Arc<Subbuffer<[Vertex3]>>,
-    pub index_buffer: Arc<Subbuffer<[u32]>>,
+    /// The vertex buffer allocated for all registered meshes.
+    pub vertex_buffer: Option<VertexBuffer>,
+    /// The index buffer allocated for all registered meshes.
+    pub index_buffer: Option<IndexBuffer>,
 }
 
 impl MeshRegistry {
+    /// Creates a new, blank `MeshRegistry` instance.
+    pub fn new(allocator: Arc<dyn MemoryAllocator>) -> Self {
+        Self {
+            meshes: HashMap::new(),
+            vertex_buffer: None,
+            index_buffer: None,
+            allocator
+        }
+    }
+
+    /// Registers a [`MeshHandle`] to the registry, if it does not already exist.
+    pub fn register(&mut self, mesh_id: String, mesh: MeshHandle) {
+        self.meshes.insert(mesh_id, mesh);
+    }
+
     /// Creates a `MeshRegistry` from the given [`Scene`].
     ///
     /// This method will load all the meshes indicated by the scene and allocate the required
     /// buffers. This significantly simplifies the allocation process, as the buffers only need to
     /// be allocated once.
-    pub fn from_scene(scene: &Scene, allocator: Arc<dyn MemoryAllocator>) -> Self {
+    pub fn load_scene(&mut self, scene: &Scene, allocator: Arc<dyn MemoryAllocator>) {
         // Load all the meshes into a single map.
         println!("Loading meshes from scene");
 
@@ -93,7 +110,7 @@ impl MeshRegistry {
             // TODO Create bounding boxes for each mesh and associate them with the struct.
             mesh_list.insert(
                 id.clone(),
-                Mesh {
+                MeshHandle {
                     id,
                     vertex_loc: vert_start,
                     vertex_count: obj_num_verts,
@@ -107,20 +124,16 @@ impl MeshRegistry {
         let vertex_buffer = Self::alloc_vert_buffer(allocator.clone(), buf_verts);
         let index_buffer = Self::alloc_index_buffer(allocator.clone(), buf_indices);
 
-        // Finally, return the struct.
-        Self {
-            meshes: mesh_list,
-            vertex_buffer,
-            index_buffer,
-            allocator,
-        }
+        self.meshes = mesh_list;
+        self.vertex_buffer = Some(vertex_buffer);
+        self.index_buffer = Some(index_buffer);
     }
 
     /// Allocates and writes to a vertex buffer with the given `Vec<Vertex3>`.
     fn alloc_vert_buffer(
         alloc: Arc<dyn MemoryAllocator>,
         verts: Vec<Vertex3>,
-    ) -> Arc<Subbuffer<[Vertex3]>> {
+    ) -> VertexBuffer {
         println!("Allocating vertex buffer");
         Arc::new(
             Buffer::from_iter(
@@ -144,7 +157,7 @@ impl MeshRegistry {
     fn alloc_index_buffer(
         alloc: Arc<dyn MemoryAllocator>,
         indices: Vec<u32>,
-    ) -> Arc<Subbuffer<[u32]>> {
+    ) -> IndexBuffer {
         println!("Allocating index buffer");
         Arc::new(
             Buffer::from_iter(
@@ -164,8 +177,13 @@ impl MeshRegistry {
         )
     }
 
-    /// Attempts to find a [`Mesh`] with the given ID, returning `None` if it's not found.
-    pub fn get(&self, uuid: &String) -> Option<&Mesh> {
+    /// Attempts to find a [`MeshHandle`] with the given ID, returning `None` if it's not found.
+    pub fn get(&self, uuid: &String) -> Option<&MeshHandle> {
         self.meshes.get(uuid)
+    }
+
+    /// Returns a boolean indicating whether the requested [`MeshHandle`] exists.
+    pub fn exists(&self, uuid: &String) -> bool {
+        self.get(uuid).is_some()
     }
 }

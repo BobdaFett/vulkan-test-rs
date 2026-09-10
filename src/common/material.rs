@@ -1,13 +1,15 @@
 use std::collections::HashMap;
+use std::sync::Arc;
+use vulkano::memory::allocator::MemoryAllocator;
 
 pub struct MaterialRegistry {
-    materials: HashMap<String, Material>,
+    materials: HashMap<String, Material>
 }
 
 impl MaterialRegistry {
     pub fn new() -> Self {
         Self {
-            materials: HashMap::new(),
+            materials: HashMap::new()
         }
     }
 

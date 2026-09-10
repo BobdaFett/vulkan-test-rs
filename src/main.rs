@@ -1,7 +1,7 @@
 mod app;
 mod common;
 pub mod gpu;
-pub mod loaders;
+pub mod assets;
 // pub mod math;
 
 use crate::app::App;

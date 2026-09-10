@@ -1,5 +1,5 @@
 use super::gltf_loader::*;
-use crate::loaders::mesh::obj_loader::ObjLoader;
+use crate::assets::loaders::mesh::obj_loader::ObjLoader;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
@@ -33,10 +33,12 @@ pub enum MeshLoaderError {
 ///  - `.gltf`
 ///  - `.obj`
 pub struct MeshLoader {
+    /// The list of mesh loaders.
     loaders: HashMap<String, Box<dyn MeshFileLoader>>,
 }
 
 impl MeshLoader {
+    /// Creates a new `MeshLoader` instance.
     pub fn new() -> Self {
         let mut loaders = HashMap::new();
         loaders.insert(

@@ -1,8 +1,8 @@
+use crate::assets::loaders::material::gltf_mat_loader::GltfMaterialLoader;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
 use thiserror::Error;
-use anyhow::Result;
-use crate::loaders::material::gltf_mat_loader::GltfMaterialLoader;
 
 #[derive(Error, Debug)]
 pub enum MaterialLoaderError {
@@ -29,18 +29,16 @@ impl MaterialLoader {
         Self { loaders }
     }
 
-    /// Loads a material from the given path. Note that some materials are loaded through their
-    /// mesh's file (GLTF embeds materials, however OBJ files have a separate .mtl file). These
-    /// quirks must be handled differently. Refer to the [`MaterialLoader`] for more information
+    /// Loads all materials from the given path. Refer to the [`MaterialLoader`] for more information
     /// on supported material files and which files to target.
-    pub fn load_material<P: AsRef<Path>>(&mut self, path: P) -> Result<MaterialInfo> {
+    pub fn load_materials<P: AsRef<Path>>(&mut self, path: P) -> Result<Vec<MaterialInfo>> {
         let path = path.as_ref();
         let file_ext = path.extension().and_then(|ext| ext.to_str())
             .ok_or(MaterialLoaderError::MissingExtension)?;
 
         self.loaders.get(file_ext)
             .ok_or(MaterialLoaderError::ExtensionNotSupported(file_ext.to_string()))?
-            .load_material(path)
+            .load_materials(path)
     }
 }
 
@@ -79,5 +77,5 @@ pub struct MaterialUniforms {
 /// A trait that must be implemented on all material loaders. Ensures consistent material
 /// import/load information.
 pub trait MaterialFileLoader {
-    fn load_material(&self, path: &Path) -> anyhow::Result<MaterialInfo>;
+    fn load_materials(&self, path: &Path) -> anyhow::Result<Vec<MaterialInfo>>;
 }

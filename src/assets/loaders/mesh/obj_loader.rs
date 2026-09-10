@@ -1,5 +1,4 @@
-use crate::gpu::vertex3::Vertex3;
-use crate::loaders::mesh_loader::{MeshFileLoader, MeshInfo};
+use crate::assets::loaders::mesh_loader::{MeshFileLoader, MeshInfo};
 use std::path::Path;
 use wavefront::Obj;
 

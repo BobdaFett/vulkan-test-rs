@@ -1,8 +1,8 @@
-use crate::loaders::mesh_loader::{MeshFileLoader, MeshInfo};
+use crate::assets::loaders::mesh_loader::{MeshFileLoader, MeshInfo};
 use anyhow::Result;
-use std::path::Path;
 use gltf::buffer::Data;
 use nalgebra::{Matrix4, Vector4};
+use std::path::Path;
 
 pub struct GltfLoader;
 
@@ -58,6 +58,9 @@ impl GltfLoader {
                         indices.push(index + vert_offset);
                     }
                 }
+
+                primitive.material().pbr_metallic_roughness()
+                    .metallic_factor();
             }
         }
 
