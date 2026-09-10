@@ -1,6 +1,5 @@
+use crate::assets::loaders::material::mat_loader::MaterialInfo;
 use std::collections::HashMap;
-use std::sync::Arc;
-use vulkano::memory::allocator::MemoryAllocator;
 
 pub struct MaterialRegistry {
     materials: HashMap<String, Material>
@@ -35,4 +34,19 @@ pub struct Material {
     pub normal_map: Option<String>,
     /// The path of the base color's texture, if any.
     pub base_color_texture: Option<String>,
+}
+
+impl From<MaterialInfo> for Material {
+    /// Converts loader output into a storable `Material`. `MaterialInfo::roughness_map` has no
+    /// equivalent here yet - glTF packs it with the metallic map, and there's no texture loading
+    /// in place to make use of either.
+    fn from(info: MaterialInfo) -> Self {
+        Self {
+            base_color: info.uniforms.base_color,
+            metallic: info.uniforms.metalness_factor,
+            roughness: info.uniforms.roughness_factor,
+            normal_map: info.normal_map,
+            base_color_texture: info.base_color_map,
+        }
+    }
 }

@@ -6,7 +6,7 @@ use vulkano::buffer::Subbuffer;
 use vulkano::memory::allocator::MemoryAllocator;
 use crate::assets::loaders::material::mat_loader::MaterialLoader;
 use crate::assets::loaders::mesh_loader::MeshLoader;
-use crate::common::material::MaterialRegistry;
+use crate::common::material::{Material, MaterialRegistry};
 use crate::common::mesh::{MeshHandle, MeshRegistry};
 use crate::common::scene::Scene;
 use crate::gpu::vertex3::Vertex3;
@@ -50,20 +50,35 @@ impl AssetManager {
     ///
     /// This method will attempt to auto-generate IDs for materials and textures if they do not have
     /// any preconfigured, using the ID of the mesh and the type of resource being stored.
-    pub fn load_model<P: AsRef<Path>>(&mut self, mesh_id: String, path: P) -> Result<()> {
-        // TODO: load this model's materials via `self.material_loader` and register them into
-        // `self.material_registry` under "{mesh_id}_mat_{index}" ids. `MeshRegistry` already
-        // derives each submesh's `material_id` using that exact format, so nothing else needs to
-        // change here once a real material loader exists.
+    pub fn load_model<P: AsRef<Path>>(&mut self, mesh_id: &String, path: P) -> Result<()> {
+        // Submeshes reference materials as "{mesh_id}_mat_{index}" (see
+        // `MeshRegistry::append_mesh`), matching the index materials are registered under below.
+        // Not every mesh format has a material loader yet (e.g. `.obj`), so a failure here just
+        // means no materials get registered for this mesh rather than failing the whole load.
+        match self.material_loader.load_materials(&path) {
+            Ok(materials) => {
+                for (index, info) in materials.into_iter().enumerate() {
+                    let material_id = format!("{mesh_id}_mat_{index}");
+                    self.material_registry
+                        .register(material_id.clone(), info.into());
+                    println!("Loaded material {material_id}");
+                }
+            }
+            Err(err) => println!("No materials loaded for mesh \"{mesh_id}\": {err}"),
+        }
+
         let mesh = self.mesh_loader.load_mesh(&path)?;
-        self.mesh_registry.register_mesh(mesh_id, mesh);
+        self.mesh_registry.register_mesh(mesh_id.clone(), mesh);
 
         Ok(())
     }
 
     /// Loads every mesh referenced by a [`Scene`] and allocates the buffers needed to render them.
     pub fn load_scene(&mut self, scene: &Scene) -> Result<()> {
-        self.mesh_registry.load_scene(scene, self.allocator.clone());
+        for (id, path) in &scene.mesh_paths {
+            self.load_model(id, path)
+                .expect("Couldn't load mesh file");
+        }
 
         Ok(())
     }
@@ -96,5 +111,11 @@ impl AssetManager {
     /// Returns every currently registered mesh, keyed by ID.
     pub fn meshes(&self) -> &HashMap<String, MeshHandle> {
         &self.mesh_registry.meshes
+    }
+
+    /// Looks up a registered material by its ID (e.g. a [`crate::common::mesh::SubmeshHandle`]'s
+    /// `material_id`).
+    pub fn get_material(&self, material_id: &String) -> Option<&Material> {
+        self.material_registry.get(material_id)
     }
 }

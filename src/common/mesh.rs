@@ -1,5 +1,4 @@
-use crate::assets::loaders::mesh_loader::{MeshInfo, MeshLoader};
-use crate::common::scene::Scene;
+use crate::assets::loaders::mesh_loader::MeshInfo;
 use crate::gpu::vertex3::Vertex3;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -145,42 +144,6 @@ impl MeshRegistry {
             &mut self.raw_indices,
         );
         self.meshes.insert(mesh_id, handle);
-        self.rebuild_buffers();
-    }
-
-    /// Creates a `MeshRegistry` from the given [`Scene`].
-    ///
-    /// This method will load all the meshes indicated by the scene and allocate the required
-    /// buffers. This significantly simplifies the allocation process, as the buffers only need to
-    /// be allocated once.
-    pub fn load_scene(&mut self, scene: &Scene, allocator: Arc<dyn MemoryAllocator>) {
-        // Load all the meshes into a single map.
-        println!("Loading meshes from scene");
-        self.allocator = allocator;
-
-        let mesh_loader = MeshLoader::new();
-        let meshes = scene
-            .mesh_paths
-            .iter()
-            .map(|(id, path)| {
-                (
-                    id.clone(),
-                    mesh_loader
-                        .load_mesh(path)
-                        .expect("Couldn't read wavefront file"),
-                )
-            })
-            .collect::<HashMap<String, MeshInfo>>();
-
-        self.raw_vertices.clear();
-        self.raw_indices.clear();
-        let mut mesh_list = HashMap::new();
-        meshes.into_iter().for_each(|(id, info)| {
-            let handle = Self::append_mesh(&id, info, &mut self.raw_vertices, &mut self.raw_indices);
-            mesh_list.insert(id, handle);
-        });
-
-        self.meshes = mesh_list;
         self.rebuild_buffers();
     }
 

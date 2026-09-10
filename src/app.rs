@@ -4,6 +4,7 @@ use crate::common::instance::InstanceRegistry;
 use crate::common::render_batch::RenderBatch;
 use crate::common::scene::Scene;
 use crate::gpu::instance::GpuInstance;
+use crate::gpu::material::MaterialPushConstants;
 use crate::gpu::vertex3::Vertex3;
 use crate::triangle;
 use std::error::Error;
@@ -47,6 +48,10 @@ use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowAttributes, WindowId};
+
+/// Used for a submesh whose material couldn't be resolved (no material assigned, or nothing
+/// registered under its material ID yet).
+const DEFAULT_BASE_COLOR: [f32; 4] = [0.5, 0.5, 0.5, 1.0];
 
 struct VulkanContext {
     window: Arc<Window>,
@@ -472,13 +477,38 @@ impl VulkanContext {
                     .get_mesh(&batch.mesh_id)
                     .expect("Mesh does not exist in registry");
 
+                let mesh_id = &mesh.id;
+
                 builder
                     .bind_vertex_buffers(1, batch.instance_buffer.clone())
                     .unwrap();
 
-                // Issue one draw call per submesh so each can eventually be bound to its own
-                // material. All submeshes share the mesh's instance buffer.
+                // Issue one draw call per submesh, pushing its material's base color first so
+                // each submesh is shaded independently. All submeshes share the mesh's instance
+                // buffer. Submeshes without a resolved material fall back to a flat gray.
                 for submesh in &mesh.submeshes {
+                    let material_id = submesh.material_id.as_ref();
+                    let base_color = material_id
+                        .and_then(|id| asset_manager.get_material(id))
+                        .map_or_else(
+                            || {
+                                println!("Couldn't find material {material_id:?} for {mesh_id:?}");
+                                DEFAULT_BASE_COLOR
+                            },
+                            |material| {
+                                println!("Found material {material_id:?} for {mesh_id:?}, with base color {:?}", material.base_color);
+                                material.base_color
+                            }
+                        );
+
+                    builder
+                        .push_constants(
+                            pipeline.layout().clone(),
+                            0,
+                            MaterialPushConstants { base_color },
+                        )
+                        .unwrap();
+
                     builder
                         .draw_indexed(
                             submesh.index_count as u32,

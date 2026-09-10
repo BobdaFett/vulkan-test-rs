@@ -12,11 +12,16 @@ layout(set = 0, binding = 0) uniform CameraUniform {
     vec3 position;
 } camera;
 
+// Per-submesh information - MaterialPushConstants struct
+layout(push_constant) uniform MaterialPushConstants {
+    vec4 base_color;
+} material;
+
 layout(location = 0) out vec4 f_color;
 
 void main() {
-    // Default mesh color - no textures for now.
-    vec3 objectColor = vec3(0.5, 0.5, 0.5);
+    // No texture sampling yet - just the material's flat base color.
+    vec3 objectColor = material.base_color.rgb;
     // Default light information - we aren't going to edit light information until we know more about it.
     vec3 lightPosition = vec3(-100.0, 200.0, 200.0);
     vec3 lightColor = vec3(1.0, 1.0, 1.0);
