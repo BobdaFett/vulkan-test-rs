@@ -1,15 +1,25 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use anyhow::Result;
+use vulkano::buffer::Subbuffer;
 use vulkano::memory::allocator::MemoryAllocator;
 use crate::assets::loaders::material::mat_loader::MaterialLoader;
 use crate::assets::loaders::mesh_loader::MeshLoader;
 use crate::common::material::MaterialRegistry;
 use crate::common::mesh::{MeshHandle, MeshRegistry};
+use crate::common::scene::Scene;
+use crate::gpu::vertex3::Vertex3;
 
 /// A manager that controls all assets used for display. It handles loading all meshes, materials,
 /// and textures for now.
+///
+/// Callers outside this module should go through `AssetManager` rather than reaching into a
+/// [`MeshRegistry`]/[`MaterialRegistry`] directly - it's the thing that will keep meshes and their
+/// materials consistent with each other once material loading is implemented.
 pub struct AssetManager {
+    /// The memory allocator used to (re)allocate the mesh registry's buffers.
+    allocator: Arc<dyn MemoryAllocator>,
     /// The asset manager's [`MeshRegistry`].
     mesh_registry: MeshRegistry,
     /// The asset manager's [`MaterialRegistry`].
@@ -26,6 +36,7 @@ impl AssetManager {
         let mesh_registry = MeshRegistry::new(allocator.clone());
         let material_registry = MaterialRegistry::new();
         Self {
+            allocator,
             mesh_registry,
             material_registry,
             mesh_loader: MeshLoader::new(),
@@ -39,23 +50,51 @@ impl AssetManager {
     ///
     /// This method will attempt to auto-generate IDs for materials and textures if they do not have
     /// any preconfigured, using the ID of the mesh and the type of resource being stored.
-    pub fn load_model<P: AsRef<Path>>(&mut self, _mesh_id: String, path: P) -> Result<()> {
-        // Load and register all materials first - submeshes will reference these materials.
-        let _materials = self.material_loader.load_materials(&path)?;
+    pub fn load_model<P: AsRef<Path>>(&mut self, mesh_id: String, path: P) -> Result<()> {
+        // TODO: load this model's materials via `self.material_loader` and register them into
+        // `self.material_registry` under "{mesh_id}_mat_{index}" ids. `MeshRegistry` already
+        // derives each submesh's `material_id` using that exact format, so nothing else needs to
+        // change here once a real material loader exists.
+        let mesh = self.mesh_loader.load_mesh(&path)?;
+        self.mesh_registry.register_mesh(mesh_id, mesh);
 
-        // Load the mesh. Each of `mesh.submeshes` carries a `material_index` local to this file,
-        // which should be resolved against `materials` (e.g. via a generated
-        // "{mesh_id}_mat_{index}" id) once there's a way to register it.
-        let _mesh = self.mesh_loader.load_mesh(&path)?;
-
-        // `MeshRegistry` only knows how to allocate its shared vertex/index buffers in one batch
-        // via `load_scene`; there's no way yet to register a single mesh's `MeshInfo` into
-        // already-allocated buffers (or grow them), so this can't build a `MeshHandle` yet.
-        todo!("MeshRegistry needs support for registering a single mesh after its buffers are already allocated")
+        Ok(())
     }
 
-    /// Loads all information from a scene, returning an empty `Result` indicating success or failure.
-    pub fn load_scene<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+    /// Loads every mesh referenced by a [`Scene`] and allocates the buffers needed to render them.
+    pub fn load_scene(&mut self, scene: &Scene) -> Result<()> {
+        self.mesh_registry.load_scene(scene, self.allocator.clone());
+
         Ok(())
+    }
+
+    /// Returns the shared vertex buffer backing every mesh currently registered.
+    pub fn vertex_buffer(&self) -> Subbuffer<[Vertex3]> {
+        self.mesh_registry
+            .vertex_buffer
+            .as_ref()
+            .expect("Vertex buffer not allocated")
+            .as_ref()
+            .clone()
+    }
+
+    /// Returns the shared index buffer backing every mesh currently registered.
+    pub fn index_buffer(&self) -> Subbuffer<[u32]> {
+        self.mesh_registry
+            .index_buffer
+            .as_ref()
+            .expect("Index buffer not allocated")
+            .as_ref()
+            .clone()
+    }
+
+    /// Looks up a registered mesh by its ID.
+    pub fn get_mesh(&self, mesh_id: &String) -> Option<&MeshHandle> {
+        self.mesh_registry.get(mesh_id)
+    }
+
+    /// Returns every currently registered mesh, keyed by ID.
+    pub fn meshes(&self) -> &HashMap<String, MeshHandle> {
+        &self.mesh_registry.meshes
     }
 }

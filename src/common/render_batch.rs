@@ -1,5 +1,5 @@
+use crate::assets::asset_manager::AssetManager;
 use crate::common::instance::InstanceRegistry;
-use crate::common::mesh::MeshRegistry;
 use crate::gpu::instance::GpuInstance;
 use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
@@ -17,13 +17,13 @@ impl RenderBatch {
     /// once per frame.
     pub fn build_batches(
         allocator: Arc<dyn MemoryAllocator>,
-        mesh_registry: Arc<MeshRegistry>,
+        asset_manager: Arc<AssetManager>,
         instance_registry: Arc<InstanceRegistry>,
     ) -> Vec<Self> {
-        mesh_registry
-            .meshes
+        asset_manager
+            .meshes()
             .iter()
-            .filter_map(|(id, mesh)| {
+            .filter_map(|(id, _mesh)| {
                 let instances = instance_registry.get_instances_for(id);
 
                 if instances.is_empty() {

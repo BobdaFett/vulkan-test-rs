@@ -34,10 +34,11 @@ impl MeshHandle {}
 /// offset into the registry's shared index buffer rather than an offset local to one loaded file.
 #[derive(Debug, Clone)]
 pub struct SubmeshHandle {
-    /// The material index this submesh was assigned in its source file, if any. This is not yet
-    /// resolved to a [`crate::common::material::Material`] - that mapping is the caller's
-    /// responsibility until material loading is wired into mesh registration.
-    pub material_index: Option<usize>,
+    /// The id this submesh's material should be looked up under in a
+    /// [`crate::common::material::MaterialRegistry`], if the source file assigned one. Follows
+    /// the `"{mesh_id}_mat_{index}"` convention - nothing requires a material actually be
+    /// registered under this id yet, until material loading is wired up.
+    pub material_id: Option<String>,
     pub index_loc: usize,
     pub index_count: usize,
 }
@@ -58,6 +59,11 @@ pub struct MeshRegistry {
     pub vertex_buffer: Option<VertexBuffer>,
     /// The index buffer allocated for all registered meshes.
     pub index_buffer: Option<IndexBuffer>,
+    /// The raw vertex data backing `vertex_buffer`, kept around so a single mesh can be appended
+    /// via [`Self::register_mesh`] without losing every previously registered mesh's data.
+    raw_vertices: Vec<Vertex3>,
+    /// The raw index data backing `index_buffer`. See `raw_vertices`.
+    raw_indices: Vec<u32>,
 }
 
 impl MeshRegistry {
@@ -67,13 +73,79 @@ impl MeshRegistry {
             meshes: HashMap::new(),
             vertex_buffer: None,
             index_buffer: None,
+            raw_vertices: Vec::new(),
+            raw_indices: Vec::new(),
             allocator
         }
     }
 
-    /// Registers a [`MeshHandle`] to the registry, if it does not already exist.
-    pub fn register(&mut self, mesh_id: String, mesh: MeshHandle) {
-        self.meshes.insert(mesh_id, mesh);
+    /// Appends a single already-loaded mesh to `verts`/`indices`, returning a [`MeshHandle`]
+    /// describing where its data landed. A submesh's `material_id` is derived purely from
+    /// `mesh_id` and the submesh's position in the source file, so this works whether or not a
+    /// material has actually been registered under that id yet.
+    fn append_mesh(
+        mesh_id: &str,
+        info: MeshInfo,
+        verts: &mut Vec<Vertex3>,
+        indices: &mut Vec<u32>,
+    ) -> MeshHandle {
+        let vertex_loc = verts.len();
+        let vertex_count = info.vertices.len();
+        info.vertices
+            .iter()
+            .zip(info.normals.iter())
+            .zip(info.uvs.iter())
+            .for_each(|((pos, norm), uv)| {
+                verts.push(Vertex3::new(*pos, *norm, *uv));
+            });
+
+        let index_loc = indices.len();
+        let index_count = info.indices.len();
+        indices.extend(info.indices);
+
+        let submeshes = info
+            .submeshes
+            .into_iter()
+            .map(|submesh| SubmeshHandle {
+                material_id: submesh
+                    .material_index
+                    .map(|i| format!("{mesh_id}_mat_{i}")),
+                index_loc: index_loc + submesh.index_start,
+                index_count: submesh.index_count,
+            })
+            .collect::<Vec<_>>();
+
+        println!(
+            "Loaded mesh \"{}\" with {} vertices, {} indices, and {} submesh(es)",
+            mesh_id, vertex_count, index_count, submeshes.len()
+        );
+
+        MeshHandle {
+            id: mesh_id.to_string(),
+            vertex_loc,
+            vertex_count,
+            index_loc,
+            index_count,
+            submeshes,
+        }
+    }
+
+    /// Registers a single mesh, independently of a full [`Scene`] - e.g. from
+    /// [`crate::assets::asset_manager::AssetManager`] loading one model at a time. Appends the
+    /// mesh's data to the registry's shared buffers and reallocates them.
+    ///
+    /// This is far less efficient than batching a whole scene through [`Self::load_scene`], since
+    /// every call reallocates and re-uploads the full vertex/index buffers - fine for loading a
+    /// handful of models up front, not for anything performance-sensitive.
+    pub fn register_mesh(&mut self, mesh_id: String, info: MeshInfo) {
+        let handle = Self::append_mesh(
+            &mesh_id,
+            info,
+            &mut self.raw_vertices,
+            &mut self.raw_indices,
+        );
+        self.meshes.insert(mesh_id, handle);
+        self.rebuild_buffers();
     }
 
     /// Creates a `MeshRegistry` from the given [`Scene`].
@@ -84,6 +156,7 @@ impl MeshRegistry {
     pub fn load_scene(&mut self, scene: &Scene, allocator: Arc<dyn MemoryAllocator>) {
         // Load all the meshes into a single map.
         println!("Loading meshes from scene");
+        self.allocator = allocator;
 
         let mesh_loader = MeshLoader::new();
         let meshes = scene
@@ -99,64 +172,29 @@ impl MeshRegistry {
             })
             .collect::<HashMap<String, MeshInfo>>();
 
-        let mut buf_verts = Vec::new();
-        let mut buf_indices = Vec::new();
+        self.raw_vertices.clear();
+        self.raw_indices.clear();
         let mut mesh_list = HashMap::new();
-        meshes.into_iter().for_each(|(id, obj)| {
-            // Information will be added directly to the verts and indices vectors, and a new Mesh
-            // struct will be created and inserted into the mesh_list.
-            let vert_start = buf_verts.len();
-            let all_verts = obj.vertices;
-            let all_norms = obj.normals;
-            let obj_num_verts = all_verts.len();
-            all_verts
-                .iter()
-                .zip(all_norms.iter())
-                .zip(obj.uvs.iter())
-                .for_each(|((pos, norm), uv)| {
-                    buf_verts.push(Vertex3::new(*pos, *norm, *uv));
-                });
-
-            let index_start = buf_indices.len();
-            let obj_num_idx = obj.indices.len();
-            buf_indices.extend(obj.indices);
-
-            let submeshes = obj
-                .submeshes
-                .into_iter()
-                .map(|submesh| SubmeshHandle {
-                    material_index: submesh.material_index,
-                    index_loc: index_start + submesh.index_start,
-                    index_count: submesh.index_count,
-                })
-                .collect::<Vec<_>>();
-
-            println!(
-                "Loaded mesh \"{}\" with {} vertices, {} indices, and {} submesh(es)",
-                id, obj_num_verts, obj_num_idx, submeshes.len()
-            );
-
-            // TODO Create bounding boxes for each mesh and associate them with the struct.
-            mesh_list.insert(
-                id.clone(),
-                MeshHandle {
-                    id,
-                    vertex_loc: vert_start,
-                    vertex_count: obj_num_verts,
-                    index_loc: index_start,
-                    index_count: obj_num_idx,
-                    submeshes,
-                },
-            );
+        meshes.into_iter().for_each(|(id, info)| {
+            let handle = Self::append_mesh(&id, info, &mut self.raw_vertices, &mut self.raw_indices);
+            mesh_list.insert(id, handle);
         });
 
-        // Allocate buffers for the information.
-        let vertex_buffer = Self::alloc_vert_buffer(allocator.clone(), buf_verts);
-        let index_buffer = Self::alloc_index_buffer(allocator.clone(), buf_indices);
-
         self.meshes = mesh_list;
-        self.vertex_buffer = Some(vertex_buffer);
-        self.index_buffer = Some(index_buffer);
+        self.rebuild_buffers();
+    }
+
+    /// (Re)allocates `vertex_buffer`/`index_buffer` from the currently accumulated
+    /// `raw_vertices`/`raw_indices`.
+    fn rebuild_buffers(&mut self) {
+        self.vertex_buffer = Some(Self::alloc_vert_buffer(
+            self.allocator.clone(),
+            self.raw_vertices.clone(),
+        ));
+        self.index_buffer = Some(Self::alloc_index_buffer(
+            self.allocator.clone(),
+            self.raw_indices.clone(),
+        ));
     }
 
     /// Allocates and writes to a vertex buffer with the given `Vec<Vertex3>`.

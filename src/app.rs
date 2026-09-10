@@ -1,6 +1,6 @@
+use crate::assets::asset_manager::AssetManager;
 use crate::common::camera::{Camera, CameraResources};
 use crate::common::instance::InstanceRegistry;
-use crate::common::mesh::MeshRegistry;
 use crate::common::render_batch::RenderBatch;
 use crate::common::scene::Scene;
 use crate::gpu::instance::GpuInstance;
@@ -62,7 +62,7 @@ struct VulkanContext {
     render_pass: Arc<RenderPass>,
     framebuffers: Vec<Arc<Framebuffer>>,
     pipeline: Arc<GraphicsPipeline>,
-    mesh_registry: Arc<MeshRegistry>,
+    asset_manager: Arc<AssetManager>,
     instance_registry: Arc<InstanceRegistry>,
     camera: Camera,
     camera_resources: Arc<CameraResources>,
@@ -189,9 +189,11 @@ impl VulkanContext {
         );
 
         let scene = Scene::from_file_json("./test_scene.scene");
-        let mut mesh_registry = MeshRegistry::new(mem_allocator.clone());
-        mesh_registry.load_scene(&scene, mem_allocator.clone());
-        let mesh_registry = Arc::new(mesh_registry);
+        let mut asset_manager = AssetManager::new(mem_allocator.clone());
+        asset_manager
+            .load_scene(&scene)
+            .expect("Couldn't load scene's meshes");
+        let asset_manager = Arc::new(asset_manager);
         let instance_registry = Arc::new(InstanceRegistry::from_scene(&scene));
 
         Ok(Self {
@@ -208,7 +210,7 @@ impl VulkanContext {
             frag_shader,
             framebuffers,
             pipeline,
-            mesh_registry,
+            asset_manager,
             instance_registry,
             camera,
             camera_resources,
@@ -247,10 +249,10 @@ impl VulkanContext {
             self.framebuffers[image_idx as usize].clone(),
             &self.camera,
             &self.camera_resources,
-            self.mesh_registry.clone(),
+            self.asset_manager.clone(),
             RenderBatch::build_batches(
                 self.mem_allocator.clone(),
-                self.mesh_registry.clone(),
+                self.asset_manager.clone(),
                 self.instance_registry.clone(),
             ),
         )?;
@@ -431,7 +433,7 @@ impl VulkanContext {
         framebuffer: Arc<Framebuffer>,
         camera: &Camera,
         camera_resources: &CameraResources,
-        mesh_registry: Arc<MeshRegistry>,
+        asset_manager: Arc<AssetManager>,
         render_batches: Vec<RenderBatch>,
     ) -> Result<Arc<PrimaryAutoCommandBuffer>, Box<dyn Error>> {
         let mut builder = AutoCommandBufferBuilder::primary(
@@ -460,29 +462,14 @@ impl VulkanContext {
                 camera_resources.descriptor_set().clone(),
             )?
             .bind_pipeline_graphics(pipeline.clone())?
-            .bind_vertex_buffers(
-                0,
-                mesh_registry
-                    .vertex_buffer
-                    .as_ref()
-                    .expect("Vertex buffer not allocated")
-                    .as_ref()
-                    .clone(),
-            )?
-            .bind_index_buffer(
-                mesh_registry
-                    .index_buffer
-                    .as_ref()
-                    .expect("Index buffer not allocated")
-                    .as_ref()
-                    .clone(),
-            )?;
+            .bind_vertex_buffers(0, asset_manager.vertex_buffer())?
+            .bind_index_buffer(asset_manager.index_buffer())?;
 
         unsafe {
             render_batches.iter().for_each(|batch| {
                 // Grab mesh information
-                let mesh = mesh_registry
-                    .get(&batch.mesh_id)
+                let mesh = asset_manager
+                    .get_mesh(&batch.mesh_id)
                     .expect("Mesh does not exist in registry");
 
                 builder
