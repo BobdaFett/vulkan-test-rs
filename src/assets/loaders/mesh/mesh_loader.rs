@@ -14,6 +14,23 @@ pub struct MeshInfo {
     pub indices: Vec<u32>,
     /// The texture coordinates. Note that these may also be used on 3D textures.
     pub uvs: Vec<[f32; 3]>,
+    /// The contiguous ranges of `indices` that should be drawn with a single material, in the
+    /// order they were encountered in the source file.
+    pub submeshes: Vec<Submesh>,
+}
+
+/// A contiguous range within a [`MeshInfo`]'s `indices`, along with the material it should be
+/// drawn with. Ranges are local to a single loaded file - a [`crate::common::mesh::MeshRegistry`]
+/// rewrites these into offsets within its own shared index buffer.
+#[derive(Debug, Clone)]
+pub struct Submesh {
+    /// The index of the material this submesh uses, as defined by the source file (e.g. a glTF
+    /// material index). `None` if the file did not assign a material to this range.
+    pub material_index: Option<usize>,
+    /// The offset of this submesh's first index within `MeshInfo::indices`.
+    pub index_start: usize,
+    /// The number of indices that make up this submesh.
+    pub index_count: usize,
 }
 
 pub trait MeshFileLoader {

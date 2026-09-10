@@ -189,7 +189,9 @@ impl VulkanContext {
         );
 
         let scene = Scene::from_file_json("./test_scene.scene");
-        let mesh_registry = Arc::new(MeshRegistry::from_scene(&scene, mem_allocator.clone()));
+        let mut mesh_registry = MeshRegistry::new(mem_allocator.clone());
+        mesh_registry.load_scene(&scene, mem_allocator.clone());
+        let mesh_registry = Arc::new(mesh_registry);
         let instance_registry = Arc::new(InstanceRegistry::from_scene(&scene));
 
         Ok(Self {
@@ -458,8 +460,23 @@ impl VulkanContext {
                 camera_resources.descriptor_set().clone(),
             )?
             .bind_pipeline_graphics(pipeline.clone())?
-            .bind_vertex_buffers(0, mesh_registry.vertex_buffer.as_ref().clone())?
-            .bind_index_buffer(mesh_registry.index_buffer.as_ref().clone())?;
+            .bind_vertex_buffers(
+                0,
+                mesh_registry
+                    .vertex_buffer
+                    .as_ref()
+                    .expect("Vertex buffer not allocated")
+                    .as_ref()
+                    .clone(),
+            )?
+            .bind_index_buffer(
+                mesh_registry
+                    .index_buffer
+                    .as_ref()
+                    .expect("Index buffer not allocated")
+                    .as_ref()
+                    .clone(),
+            )?;
 
         unsafe {
             render_batches.iter().for_each(|batch| {
@@ -470,15 +487,21 @@ impl VulkanContext {
 
                 builder
                     .bind_vertex_buffers(1, batch.instance_buffer.clone())
-                    .unwrap()
-                    .draw_indexed(
-                        mesh.index_count as u32,
-                        batch.instance_count,
-                        mesh.index_loc as u32,
-                        mesh.vertex_loc as i32,
-                        0,
-                    )
                     .unwrap();
+
+                // Issue one draw call per submesh so each can eventually be bound to its own
+                // material. All submeshes share the mesh's instance buffer.
+                for submesh in &mesh.submeshes {
+                    builder
+                        .draw_indexed(
+                            submesh.index_count as u32,
+                            batch.instance_count,
+                            submesh.index_loc as u32,
+                            mesh.vertex_loc as i32,
+                            0,
+                        )
+                        .unwrap();
+                }
             });
         }
 

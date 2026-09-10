@@ -19,9 +19,28 @@ pub struct MeshHandle {
     pub vertex_count: usize,
     pub index_loc: usize,
     pub index_count: usize,
+    /// The submeshes that make up this mesh, in the order they should be drawn. Each one covers
+    /// a contiguous range of the registry's shared index buffer and (once material loading is
+    /// wired up) should be drawn with its own material bound.
+    pub submeshes: Vec<SubmeshHandle>,
 }
 
 impl MeshHandle {}
+
+/// A submesh's location within a [`MeshRegistry`]'s shared index buffer, along with a reference
+/// to the material it was assigned in its source file.
+///
+/// Unlike [`crate::assets::loaders::mesh_loader::Submesh`], `index_loc` here is an absolute
+/// offset into the registry's shared index buffer rather than an offset local to one loaded file.
+#[derive(Debug, Clone)]
+pub struct SubmeshHandle {
+    /// The material index this submesh was assigned in its source file, if any. This is not yet
+    /// resolved to a [`crate::common::material::Material`] - that mapping is the caller's
+    /// responsibility until material loading is wired into mesh registration.
+    pub material_index: Option<usize>,
+    pub index_loc: usize,
+    pub index_count: usize,
+}
 
 type VertexBuffer = Arc<Subbuffer<[Vertex3]>>;
 type IndexBuffer = Arc<Subbuffer<[u32]>>;
@@ -102,9 +121,19 @@ impl MeshRegistry {
             let obj_num_idx = obj.indices.len();
             buf_indices.extend(obj.indices);
 
+            let submeshes = obj
+                .submeshes
+                .into_iter()
+                .map(|submesh| SubmeshHandle {
+                    material_index: submesh.material_index,
+                    index_loc: index_start + submesh.index_start,
+                    index_count: submesh.index_count,
+                })
+                .collect::<Vec<_>>();
+
             println!(
-                "Loaded mesh \"{}\" with {} vertices and {} indices",
-                id, obj_num_verts, obj_num_idx
+                "Loaded mesh \"{}\" with {} vertices, {} indices, and {} submesh(es)",
+                id, obj_num_verts, obj_num_idx, submeshes.len()
             );
 
             // TODO Create bounding boxes for each mesh and associate them with the struct.
@@ -116,6 +145,7 @@ impl MeshRegistry {
                     vertex_count: obj_num_verts,
                     index_loc: index_start,
                     index_count: obj_num_idx,
+                    submeshes,
                 },
             );
         });

@@ -1,4 +1,4 @@
-use crate::assets::loaders::mesh_loader::{MeshFileLoader, MeshInfo};
+use crate::assets::loaders::mesh_loader::{MeshFileLoader, MeshInfo, Submesh};
 use std::path::Path;
 use wavefront::Obj;
 
@@ -17,11 +17,20 @@ impl MeshFileLoader for ObjLoader {
             })
             .collect::<Vec<u32>>();
 
+        // Wavefront `.mtl` material groups aren't loaded yet, so the whole mesh is treated as a
+        // single submesh with no assigned material.
+        let submeshes = vec![Submesh {
+            material_index: None,
+            index_start: 0,
+            index_count: index_list.len(),
+        }];
+
         Ok(MeshInfo {
             vertices: obj_info.positions().to_vec(),
             normals: obj_info.normals().to_vec(),
             indices: index_list,
             uvs: obj_info.uvs().to_vec(),
+            submeshes,
         })
     }
 }

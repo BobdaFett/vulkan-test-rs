@@ -39,15 +39,19 @@ impl AssetManager {
     ///
     /// This method will attempt to auto-generate IDs for materials and textures if they do not have
     /// any preconfigured, using the ID of the mesh and the type of resource being stored.
-    pub fn load_model<P: AsRef<Path>>(&mut self, mesh_id: String, path: P) -> Result<()> {
+    pub fn load_model<P: AsRef<Path>>(&mut self, _mesh_id: String, path: P) -> Result<()> {
         // Load and register all materials first - submeshes will reference these materials.
-        let materials = self.material_loader.load_materials(&path)?;
+        let _materials = self.material_loader.load_materials(&path)?;
 
-        // Load and register the mesh using the materials
-        let mesh = self.mesh_loader.load_mesh(&path)?;
-        self.mesh_registry.register(mesh_id, mesh);
+        // Load the mesh. Each of `mesh.submeshes` carries a `material_index` local to this file,
+        // which should be resolved against `materials` (e.g. via a generated
+        // "{mesh_id}_mat_{index}" id) once there's a way to register it.
+        let _mesh = self.mesh_loader.load_mesh(&path)?;
 
-        Ok(())
+        // `MeshRegistry` only knows how to allocate its shared vertex/index buffers in one batch
+        // via `load_scene`; there's no way yet to register a single mesh's `MeshInfo` into
+        // already-allocated buffers (or grow them), so this can't build a `MeshHandle` yet.
+        todo!("MeshRegistry needs support for registering a single mesh after its buffers are already allocated")
     }
 
     /// Loads all information from a scene, returning an empty `Result` indicating success or failure.

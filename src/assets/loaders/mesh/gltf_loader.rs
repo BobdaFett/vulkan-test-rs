@@ -1,4 +1,4 @@
-use crate::assets::loaders::mesh_loader::{MeshFileLoader, MeshInfo};
+use crate::assets::loaders::mesh_loader::{MeshFileLoader, MeshInfo, Submesh};
 use anyhow::Result;
 use gltf::buffer::Data;
 use nalgebra::{Matrix4, Vector4};
@@ -15,7 +15,8 @@ impl GltfLoader {
         vertices: &mut Vec<[f32; 3]>,
         normals: &mut Vec<[f32; 3]>,
         uvs: &mut Vec<[f32; 3]>,
-        indices: &mut Vec<u32>
+        indices: &mut Vec<u32>,
+        submeshes: &mut Vec<Submesh>,
     ) {
         let transform = node.transform().matrix()
             .iter()
@@ -29,6 +30,7 @@ impl GltfLoader {
             // Read the mesh and apply the current transformation to every vertex
             for primitive in mesh.primitives() {
                 let vert_offset = vertices.len() as u32;
+                let index_start = indices.len();
 
                 let reader = primitive.reader(|buffer_index| Some(&buffers[buffer_index.index()]));
 
@@ -59,8 +61,11 @@ impl GltfLoader {
                     }
                 }
 
-                primitive.material().pbr_metallic_roughness()
-                    .metallic_factor();
+                submeshes.push(Submesh {
+                    material_index: primitive.material().index(),
+                    index_start,
+                    index_count: indices.len() - index_start,
+                });
             }
         }
 
@@ -73,7 +78,8 @@ impl GltfLoader {
                 vertices,
                 normals,
                 uvs,
-                indices
+                indices,
+                submeshes,
             );
         }
     }
@@ -87,6 +93,7 @@ impl MeshFileLoader for GltfLoader {
         let mut normals = Vec::new();
         let mut uvs = Vec::new();
         let mut indices = Vec::<u32>::new();
+        let mut submeshes = Vec::new();
 
         let scenes = document.scenes();
 
@@ -104,7 +111,8 @@ impl MeshFileLoader for GltfLoader {
                     &mut vertices,
                     &mut normals,
                     &mut uvs,
-                    &mut indices
+                    &mut indices,
+                    &mut submeshes,
                 );
             }
         }
@@ -114,6 +122,7 @@ impl MeshFileLoader for GltfLoader {
             indices,
             normals,
             uvs,
+            submeshes,
         })
     }
 }
