@@ -1,15 +1,16 @@
-use std::collections::HashMap;
-use std::path::Path;
-use std::sync::Arc;
-use anyhow::Result;
-use vulkano::buffer::Subbuffer;
-use vulkano::memory::allocator::MemoryAllocator;
-use crate::assets::loaders::material::mat_loader::MaterialLoader;
+use crate::assets::loaders::mat_loader::MaterialLoader;
 use crate::assets::loaders::mesh_loader::MeshLoader;
 use crate::common::material::{Material, MaterialRegistry};
 use crate::common::mesh::{MeshHandle, MeshRegistry};
 use crate::common::scene::Scene;
+use crate::common::texture::TextureRegistry;
 use crate::gpu::vertex3::Vertex3;
+use anyhow::Result;
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
+use vulkano::buffer::Subbuffer;
+use vulkano::memory::allocator::MemoryAllocator;
 
 /// A manager that controls all assets used for display. It handles loading all meshes, materials,
 /// and textures for now.
@@ -24,6 +25,8 @@ pub struct AssetManager {
     mesh_registry: MeshRegistry,
     /// The asset manager's [`MaterialRegistry`].
     material_registry: MaterialRegistry,
+    /// The asset manager's [`TextureRegistry`].
+    texture_registry: TextureRegistry,
 
     // Loaders
     mesh_loader: MeshLoader,
@@ -39,6 +42,7 @@ impl AssetManager {
             allocator,
             mesh_registry,
             material_registry,
+            texture_registry: TextureRegistry::new(),
             mesh_loader: MeshLoader::new(),
             material_loader: MaterialLoader::new(),
         }

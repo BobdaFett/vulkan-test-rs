@@ -1,4 +1,4 @@
-use crate::assets::loaders::material::mat_loader::MaterialInfo;
+use crate::assets::loaders::mat_loader::MaterialLoadInfo;
 use std::collections::HashMap;
 
 pub struct MaterialRegistry {
@@ -36,11 +36,11 @@ pub struct Material {
     pub base_color_texture: Option<String>,
 }
 
-impl From<MaterialInfo> for Material {
+impl From<MaterialLoadInfo> for Material {
     /// Converts loader output into a storable `Material`. `MaterialInfo::roughness_map` has no
     /// equivalent here yet - glTF packs it with the metallic map, and there's no texture loading
     /// in place to make use of either.
-    fn from(info: MaterialInfo) -> Self {
+    fn from(info: MaterialLoadInfo) -> Self {
         Self {
             base_color: info.uniforms.base_color,
             metallic: info.uniforms.metalness_factor,

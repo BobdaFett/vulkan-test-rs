@@ -495,10 +495,7 @@ impl VulkanContext {
                                 println!("Couldn't find material {material_id:?} for {mesh_id:?}");
                                 DEFAULT_BASE_COLOR
                             },
-                            |material| {
-                                println!("Found material {material_id:?} for {mesh_id:?}, with base color {:?}", material.base_color);
-                                material.base_color
-                            }
+                            |material| material.base_color
                         );
 
                     builder

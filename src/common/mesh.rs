@@ -1,4 +1,4 @@
-use crate::assets::loaders::mesh_loader::MeshInfo;
+use crate::assets::loaders::mesh_loader::MeshLoadInfo;
 use crate::gpu::vertex3::Vertex3;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -84,7 +84,7 @@ impl MeshRegistry {
     /// material has actually been registered under that id yet.
     fn append_mesh(
         mesh_id: &str,
-        info: MeshInfo,
+        info: MeshLoadInfo,
         verts: &mut Vec<Vertex3>,
         indices: &mut Vec<u32>,
     ) -> MeshHandle {
@@ -136,7 +136,7 @@ impl MeshRegistry {
     /// This is far less efficient than batching a whole scene through [`Self::load_scene`], since
     /// every call reallocates and re-uploads the full vertex/index buffers - fine for loading a
     /// handful of models up front, not for anything performance-sensitive.
-    pub fn register_mesh(&mut self, mesh_id: String, info: MeshInfo) {
+    pub fn register_mesh(&mut self, mesh_id: String, info: MeshLoadInfo) {
         let handle = Self::append_mesh(
             &mesh_id,
             info,

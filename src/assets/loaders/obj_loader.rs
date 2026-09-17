@@ -1,11 +1,11 @@
-use crate::assets::loaders::mesh_loader::{MeshFileLoader, MeshInfo, Submesh};
+use crate::assets::loaders::mesh_loader::{LoadMesh, MeshLoadInfo, Submesh};
 use std::path::Path;
 use wavefront::Obj;
 
 pub struct ObjLoader;
 
-impl MeshFileLoader for ObjLoader {
-    fn load_mesh(&self, path: &Path) -> anyhow::Result<MeshInfo> {
+impl LoadMesh for ObjLoader {
+    fn load_mesh(&self, path: &Path) -> anyhow::Result<MeshLoadInfo> {
         let obj_info = Obj::from_file(path).expect("Couldn't read wavefront file");
 
         let index_list = obj_info
@@ -25,7 +25,7 @@ impl MeshFileLoader for ObjLoader {
             index_count: index_list.len(),
         }];
 
-        Ok(MeshInfo {
+        Ok(MeshLoadInfo {
             vertices: obj_info.positions().to_vec(),
             normals: obj_info.normals().to_vec(),
             indices: index_list,

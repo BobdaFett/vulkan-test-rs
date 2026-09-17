@@ -1,4 +1,4 @@
-pub mod mesh;
-pub mod material;
-
-pub use mesh::*;
+pub mod model_loader;
+pub mod gltf_loader;
+mod obj_loader;
+pub mod common;
