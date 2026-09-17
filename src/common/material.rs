@@ -1,5 +1,5 @@
-use crate::assets::loaders::mat_loader::MaterialLoadInfo;
 use std::collections::HashMap;
+use crate::assets::loaders::common::MaterialLoadInfo;
 
 pub struct MaterialRegistry {
     materials: HashMap<String, Material>

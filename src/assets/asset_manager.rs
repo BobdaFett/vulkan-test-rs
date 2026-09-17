@@ -1,5 +1,3 @@
-use crate::assets::loaders::mat_loader::MaterialLoader;
-use crate::assets::loaders::mesh_loader::MeshLoader;
 use crate::common::material::{Material, MaterialRegistry};
 use crate::common::mesh::{MeshHandle, MeshRegistry};
 use crate::common::scene::Scene;
@@ -11,6 +9,7 @@ use std::path::Path;
 use std::sync::Arc;
 use vulkano::buffer::Subbuffer;
 use vulkano::memory::allocator::MemoryAllocator;
+use crate::assets::loaders::model_loader::{ModelLoadOptions, ModelLoader};
 
 /// A manager that controls all assets used for display. It handles loading all meshes, materials,
 /// and textures for now.
@@ -27,10 +26,6 @@ pub struct AssetManager {
     material_registry: MaterialRegistry,
     /// The asset manager's [`TextureRegistry`].
     texture_registry: TextureRegistry,
-
-    // Loaders
-    mesh_loader: MeshLoader,
-    material_loader: MaterialLoader,
 }
 
 impl AssetManager {
@@ -43,8 +38,6 @@ impl AssetManager {
             mesh_registry,
             material_registry,
             texture_registry: TextureRegistry::new(),
-            mesh_loader: MeshLoader::new(),
-            material_loader: MaterialLoader::new(),
         }
     }
 
@@ -59,8 +52,12 @@ impl AssetManager {
         // `MeshRegistry::append_mesh`), matching the index materials are registered under below.
         // Not every mesh format has a material loader yet (e.g. `.obj`), so a failure here just
         // means no materials get registered for this mesh rather than failing the whole load.
-        match self.material_loader.load_materials(&path) {
-            Ok(materials) => {
+        let path = path.as_ref();
+        let mut loader = ModelLoader::new();
+        let model_info = loader.load_model(path, ModelLoadOptions::default())?;
+        
+        match model_info.materials {
+            Some(materials) => {
                 for (index, info) in materials.into_iter().enumerate() {
                     let material_id = format!("{mesh_id}_mat_{index}");
                     self.material_registry
@@ -68,10 +65,11 @@ impl AssetManager {
                     println!("Loaded material {material_id}");
                 }
             }
-            Err(err) => println!("No materials loaded for mesh \"{mesh_id}\": {err}"),
+            None => println!("No materials loaded for mesh \"{mesh_id}\""),
         }
 
-        let mesh = self.mesh_loader.load_mesh(&path)?;
+        let mesh = model_info.mesh
+            .expect("Mesh was not loaded");
         self.mesh_registry.register_mesh(mesh_id.clone(), mesh);
 
         Ok(())

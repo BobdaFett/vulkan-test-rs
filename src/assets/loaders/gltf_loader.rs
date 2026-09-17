@@ -1,19 +1,73 @@
 use anyhow::Result;
 use std::path::Path;
-use gltf::buffer::Data;
+use gltf::buffer::Data as BufferData;
+use gltf::image::Data as ImageData;
 use gltf::image::Source;
-use gltf::Texture;
+use gltf::{Document, Texture};
 use nalgebra::{Matrix4, Vector4};
 use crate::assets::loaders::common::{MaterialLoadInfo, MaterialUniforms, MeshLoadInfo, Submesh, TextureLoadInfo};
+use crate::assets::loaders::model_loader::{LoadModel, ModelLoadInfo, ModelLoadOptions};
 
 pub struct GltfLoader;
 
 impl GltfLoader {
-    /// Traverses and loads all information from a GLTF/GLB node.
-    pub fn traverse_node(
+    /// Returns a stable identifier for a texture's image, meant to be resolved by a texture
+    /// loader later. External images are identified by their URI; images embedded in the file
+    /// itself (e.g. in a `.glb`) have no URI, so they're identified by their image index instead.
+    fn texture_id(texture: &Texture) -> String {
+        let image = texture.source();
+        match image.source() {
+            Source::Uri { uri, .. } => uri.to_string(),
+            Source::View { .. } => format!("embedded_image_{}", image.index()),
+        }
+    }
+
+    /// Loads a mesh from the given [`Document`] and vector of [`Data`], both specific to the glTF
+    /// file format.
+    fn load_mesh(&self, document: &Document, buffers: &Vec<BufferData>) -> Result<MeshLoadInfo> {
+        let mut vertices = Vec::new();
+        let mut normals = Vec::new();
+        let mut uvs = Vec::new();
+        let mut indices = Vec::<u32>::new();
+        let mut submeshes = Vec::new();
+
+        let scenes = document.scenes();
+
+        // We need to iterate through scenes and apply the transforms from each scene to their
+        // corresponding vertices.
+        for scene in scenes {
+            for node in scene.nodes() {
+                // Read through the nodes and get all vertex information.
+                // Even if there are multiple scenes, we're treating the whole file as a single mesh.
+                Self::mesh_traverse_node(
+                    &node,
+                    &Matrix4::identity(),
+                    &buffers,
+                    &mut vertices,
+                    &mut normals,
+                    &mut uvs,
+                    &mut indices,
+                    &mut submeshes,
+                );
+            }
+        }
+
+        let info = MeshLoadInfo {
+            vertices,
+            indices,
+            normals,
+            uvs,
+            submeshes,
+        };
+
+        Ok(info)
+    }
+
+    /// Traverses and loads all mesh information from a glTF/glB node.
+    pub fn mesh_traverse_node(
         node: &gltf::Node,
         parent_transform: &Matrix4<f32>,
-        buffers: &Vec<Data>,
+        buffers: &Vec<BufferData>,
         vertices: &mut Vec<[f32; 3]>,
         normals: &mut Vec<[f32; 3]>,
         uvs: &mut Vec<[f32; 3]>,
@@ -73,7 +127,7 @@ impl GltfLoader {
 
         // Process all child nodes as well
         for child in node.children() {
-            Self::traverse_node(
+            Self::mesh_traverse_node(
                 &child,
                 &full_transform,
                 &buffers,
@@ -86,62 +140,12 @@ impl GltfLoader {
         }
     }
 
-    /// Returns a stable identifier for a texture's image, meant to be resolved by a texture
-    /// loader later. External images are identified by their URI; images embedded in the file
-    /// itself (e.g. in a `.glb`) have no URI, so they're identified by their image index instead.
-    fn texture_id(texture: &Texture) -> String {
-        let image = texture.source();
-        match image.source() {
-            Source::Uri { uri, .. } => uri.to_string(),
-            Source::View { .. } => format!("embedded_image_{}", image.index()),
-        }
-    }
-
-    fn load_mesh(&self, path: &Path) -> Result<MeshLoadInfo> {
-        let (document, buffers, _) = gltf::import(path)?;
-
-        let mut vertices = Vec::new();
-        let mut normals = Vec::new();
-        let mut uvs = Vec::new();
-        let mut indices = Vec::<u32>::new();
-        let mut submeshes = Vec::new();
-
-        let scenes = document.scenes();
-
-        // We need to iterate through scenes and apply the transforms from each scene to their
-        // corresponding vertices.
-        println!("Parsing {} scenes from {:?}", scenes.len(), path);
-        for scene in scenes {
-            for node in scene.nodes() {
-                // Read through the nodes and get all vertex information.
-                // Even if there are multiple scenes, we're treating the whole file as a single mesh.
-                Self::traverse_node(
-                    &node,
-                    &Matrix4::identity(),
-                    &buffers,
-                    &mut vertices,
-                    &mut normals,
-                    &mut uvs,
-                    &mut indices,
-                    &mut submeshes,
-                );
-            }
-        }
-
-        let info = MeshLoadInfo {
-            vertices,
-            indices,
-            normals,
-            uvs,
-            submeshes,
-        };
-
-        Ok(info)
-    }
-
-    fn load_materials(&self, path: &Path) -> anyhow::Result<Vec<MaterialLoadInfo>> {
-        let (document, _buffers, _images) = gltf::import(path)?;
-
+    /// Loads all materials from the given [`Document`] and [`Data`] buffers. These are glTF/glB
+    /// specific.
+    ///
+    /// Note that this does not load any textures that are used with the materials, so this must
+    /// be called in tandem with [`GltfLoader::load_textures`].
+    fn load_materials(&self, document: &Document, buffers: &Vec<BufferData>) -> anyhow::Result<Vec<MaterialLoadInfo>> {
         // Collected in document order, so a material's position here matches the
         // `primitive.material().index()` that mesh loading recorded for its submeshes.
         Ok(document
@@ -179,8 +183,43 @@ impl GltfLoader {
             })
             .collect())
     }
-    
-    fn load_texture(&self, path: &Path) -> Result<TextureLoadInfo> {
+
+    /// Loads all textures from the given [`Document`] and [`Data`] buffers.
+    ///
+    /// Note that loading this does not load any materials that may use the textures, so this must
+    /// be called in tandem with [`GltfLoader::load_materials`].
+    fn load_textures(&self, document: &Document, buffers: &Vec<BufferData>, images: &Vec<ImageData>) -> Result<Vec<TextureLoadInfo>> {
         todo!()
+    }
+}
+
+impl LoadModel for GltfLoader {
+    fn load_model(&self, path: &Path, options: ModelLoadOptions) -> Result<ModelLoadInfo> {
+        let mut info = ModelLoadInfo::default();
+
+        // First try to parse the file at the given path and get the information from it, then
+        // continue with processing.
+        let (document, buffers, images) = gltf::import(path)?;
+
+        if options.load_mesh {
+            // Load the mesh.
+            let mesh_info = self.load_mesh(&document, &buffers)?;
+            info.mesh = Some(mesh_info);
+        }
+
+        if options.load_materials {
+            // Load the materials.
+            let material_info = self.load_materials(&document, &buffers)?;
+            info.materials = Some(material_info);
+        }
+
+        // TODO Textures aren't currently supported.
+        // if options.load_textures {
+        //     // Load the textures.
+        //     let texture_info = self.load_textures(&document, &buffers, &images)?;
+        //     info.textures = Some(texture_info)
+        // }
+
+        Ok(info)
     }
 }

@@ -1,10 +1,10 @@
-use crate::assets::loaders::mesh_loader::{LoadMesh, MeshLoadInfo, Submesh};
 use std::path::Path;
 use wavefront::Obj;
+use crate::assets::loaders::common::{MeshLoadInfo, Submesh};
 
 pub struct ObjLoader;
 
-impl LoadMesh for ObjLoader {
+impl ObjLoader {
     fn load_mesh(&self, path: &Path) -> anyhow::Result<MeshLoadInfo> {
         let obj_info = Obj::from_file(path).expect("Couldn't read wavefront file");
 

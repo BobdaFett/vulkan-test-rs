@@ -1,7 +1,9 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::path::Path;
+use thiserror::Error;
 use crate::assets::loaders::common::{MaterialLoadInfo, MeshLoadInfo, TextureLoadInfo};
+use crate::assets::loaders::gltf_loader::GltfLoader;
 
 /// A trait for loading a model from a given path.
 pub trait LoadModel {
@@ -10,7 +12,7 @@ pub trait LoadModel {
 }
 
 /// The options applicable to loading a model.
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct ModelLoadOptions {
     /// Whether to load the full mesh.
     pub load_mesh: bool,
@@ -20,8 +22,27 @@ pub struct ModelLoadOptions {
     pub load_textures: bool,
 }
 
+impl Default for ModelLoadOptions {
+    fn default() -> Self {
+        Self {
+            load_mesh: true,
+            load_materials: true,
+            load_textures: true,
+        }
+    }
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum ModelLoadError {
+    #[error("Extension was not found")]
+    ExtensionNotFound,
+    #[error("Extension {0} is not supported")]
+    ExtensionNotSupported(String),
+}
+
 /// Contains the information about the mesh, materials, and textures that this model has loaded.
 /// Each type of information will only be loaded if the caller indicates that they should be.
+#[derive(Default)]
 pub struct ModelLoadInfo {
     /// The loaded mesh, if applicable.
     pub mesh: Option<MeshLoadInfo>,
@@ -41,9 +62,25 @@ impl ModelLoader {
     /// Creates a new `ModelLoader` instance.
     pub fn new() -> Self {
         let mut loaders =  HashMap::new();
+        loaders.insert("gltf".into(), Box::new(GltfLoader) as Box<dyn LoadModel>);
+        loaders.insert("glb".into(), Box::new(GltfLoader));
 
         Self {
             loaders,
         }
+    }
+
+    /// Loads a model from the given path. The available options are indicated by the [`ModelLoadOptions`]
+    /// struct.
+    pub fn load_model<P: AsRef<Path>>(&mut self, path: P, options: ModelLoadOptions) -> Result<ModelLoadInfo> {
+        // Determine which loader type to use.
+        let path = path.as_ref();
+        let ext = path.extension()
+            .ok_or(ModelLoadError::ExtensionNotFound)?
+            .to_str().unwrap();
+
+        self.loaders.get(ext)
+            .ok_or(ModelLoadError::ExtensionNotSupported(ext.into()))?
+            .load_model(path, options)
     }
 }

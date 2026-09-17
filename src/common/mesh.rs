@@ -1,9 +1,9 @@
-use crate::assets::loaders::mesh_loader::MeshLoadInfo;
 use crate::gpu::vertex3::Vertex3;
 use std::collections::HashMap;
 use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter};
+use crate::assets::loaders::common::MeshLoadInfo;
 
 /// This struct is slightly misleading - it doesn't actually contain the mesh information, but
 /// the locations of the mesh's information in the overall application's vertex buffer, index buffer,
